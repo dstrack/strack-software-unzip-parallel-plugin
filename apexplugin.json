@@ -1,5 +1,5 @@
 {
-  "name": "Filter Uploaded Data",
+  "name": "Unzip Parallel Process Plug-in",
   "version": "1.0.3",
   "description": "Oracle Apex - Process plug-in for parallel unzip of zip archives",
   "keywords": ["import", "unzip data"],

@@ -25,7 +25,7 @@
       "plugin": {
         "internalName": "COM.STRACK-SOFTWARE.UNZIP_PARALLEL",
         "type": "process",
-        "demo": "https://apex.oracle.com/pls/apex/f?p=108465:1",
+        "demo": "https://apex.oracle.com/pls/apex/f?p=118060:1",
         "previewImage": "https://raw.githubusercontent.com/dstrack/strack-software-unzip-parallel-plugin/master/preview.png"
       }
     }

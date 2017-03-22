@@ -1,3 +1,24 @@
+/*
+Copyright 2017 Dirk Strack
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+CREATE OR REPLACE function Unzip_Parallel_Plugin (
+	p_process in apex_plugin.t_process,
+	p_plugin  in apex_plugin.t_plugin )
+return apex_plugin.t_process_exec_result
+is
 /* Process plug-in for reading a zip file from a table, storing all expanded files in one table and the folders for the files in a second table.
 	The table for the files has a least the two columns for file_name varchar2, file_content blob
 	and optionally file_date date, file_size number, mime_type varchar2(300), folder_id number.
@@ -5,11 +26,6 @@
 	When no folder definition is provided in the Folder Query attribute, full pathnames are stored in the file_name field of the files table.
 	Zip file larger than 5MB will be processed in parallel to reduce the processing time when parallel execution is enabled.
 */
-CREATE OR REPLACE function Unzip_Parallel_Plugin (
-	p_process in apex_plugin.t_process,
-	p_plugin  in apex_plugin.t_plugin )
-return apex_plugin.t_process_exec_result
-is
 	v_exec_result apex_plugin.t_process_exec_result;
 	v_Load_Zip_Query 	VARCHAR2(4000);
 	v_Search_Value		VARCHAR2(4000);

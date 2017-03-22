@@ -1,0 +1,33 @@
+{
+  "name": "Filter Uploaded Data",
+  "version": "1.0.3",
+  "description": "Oracle Apex - Process plug-in for parallel unzip of zip archives",
+  "keywords": ["import", "unzip data"],
+  "homepage": "https://github.com/dstrack/strack-software-unzip-parallel-plugin",
+  "bugs": {
+    "url": "https://github.com/dstrack/strack-software-unzip-parallel-plugin/issues",
+    "email": "strack.software@t-online.de"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Dirk Strack",
+    "email": "strack.software@t-online.de",
+    "url": "https://strack-software-development.blogspot.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dstrack/strack-software-unzip-parallel-plugin.git"
+  },
+  "oracle": {
+    "versions": ["11.2.0.1", "12.1.0.1"],
+    "apex": {
+      "versions": ["4.2.6", "5.1.0"],
+      "plugin": {
+        "internalName": "COM.STRACK-SOFTWARE.UNZIP_PARALLEL",
+        "type": "process",
+        "demo": "https://apex.oracle.com/pls/apex/f?p=108465:1",
+        "previewImage": "https://raw.githubusercontent.com/dstrack/strack-software-unzip-parallel-plugin/master/preview.png"
+      }
+    }
+  }
+}

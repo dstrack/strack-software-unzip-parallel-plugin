@@ -1,4 +1,22 @@
-CREATE OR REPLACE VIEW VUNZIP_PARALLEL_PROGRESS
+/*
+Copyright 2017 Dirk Strack
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+CREATE OR REPLACE VIEW VUNZIP_PARALLEL_PROGRESS (
+	MESSAGE, TIME_REMAINING, ELAPSED_SECONDS, PERCENT, TARGET_DESC
+)
 AS -- Support for monitoring
 SELECT REPLACE(MESSAGE, TARGET_DESC) MESSAGE,
     TRUNC(TIME_REMAINING / 3600)
@@ -7,11 +25,11 @@ SELECT REPLACE(MESSAGE, TARGET_DESC) MESSAGE,
     TRUNC(ELAPSED_SECONDS / 3600)
     || ':' || LPAD(MOD(TRUNC(ELAPSED_SECONDS / 60), 60), 2, '0')
     || ':' || LPAD(MOD(ELAPSED_SECONDS, 60), 2, '0') ELAPSED_SECONDS,
-    ROUND(NVL(SOFAR / NULLIF(TOTALWORK, 0), 1) * 100) AS PERCENT
+    ROUND(NVL(SOFAR / NULLIF(TOTALWORK, 0), 1) * 100) AS PERCENT,
+    TARGET_DESC
 FROM V$SESSION_LONGOPS
-WHERE USERNAME = :OWNER
+WHERE USERNAME = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
 AND OPNAME = 'Expand_Zip_Archive'
-AND TARGET_DESC = :P1_FILE_ID
 AND LAST_UPDATE_TIME > SYSDATE - 1 / 24 / 4
 ORDER BY LAST_UPDATE_TIME DESC, PERCENT
 ;

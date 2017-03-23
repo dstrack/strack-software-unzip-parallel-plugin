@@ -27,7 +27,7 @@ prompt APPLICATION 118060 - Unzip Parallel Plugin Demo
 -- Application Export:
 --   Application:     118060
 --   Name:            Unzip Parallel Plugin Demo
---   Date and Time:   04:36 Wednesday March 22, 2017
+--   Date and Time:   18:15 Thursday March 23, 2017
 --   Exported By:     DIRK
 --   Flashback:       0
 --   Export Type:     Application Export
@@ -112,7 +112,7 @@ wwv_flow_api.create_flow(
 ,p_csv_encoding=>'Y'
 ,p_auto_time_zone=>'N'
 ,p_last_updated_by=>'DIRK'
-,p_last_upd_yyyymmddhh24miss=>'20170322043513'
+,p_last_upd_yyyymmddhh24miss=>'20170323181422'
 ,p_file_prefix => nvl(wwv_flow_application_install.get_static_app_file_prefix,'')
 ,p_ui_type_name => null
 );
@@ -7828,7 +7828,7 @@ wwv_flow_api.create_page(
 ,p_cache_mode=>'NOCACHE'
 ,p_help_text=>'No help is available for this page.'
 ,p_last_updated_by=>'DIRK'
-,p_last_upd_yyyymmddhh24miss=>'20170322043215'
+,p_last_upd_yyyymmddhh24miss=>'20170323181137'
 );
 wwv_flow_api.create_page_plug(
  p_id=>wwv_flow_api.id(79587757915596908)
@@ -7976,7 +7976,7 @@ wwv_flow_api.create_report_region(
 ,p_component_template_options=>'#DEFAULT#:t-Report--altRowsDefault:t-Report--rowHighlight'
 ,p_display_point=>'BODY'
 ,p_source=>wwv_flow_utilities.join(wwv_flow_t_varchar2(
-'SELECT MESSAGE, TIME_REMAINING, ELAPSED_SECONDS, PERCENT',
+'SELECT MESSAGE, TIME_REMAINING, TIME_ELAPSED, PERCENT',
 'FROM VUNZIP_PARALLEL_PROGRESS',
 'WHERE TARGET_DESC = :P1_FILE_ID',
 ''))
@@ -8011,13 +8011,15 @@ wwv_flow_api.create_report_columns(
 ,p_heading_alignment=>'RIGHT'
 );
 wwv_flow_api.create_report_columns(
- p_id=>wwv_flow_api.id(81088192378525715)
+ p_id=>wwv_flow_api.id(40630346525105301)
 ,p_query_column_id=>3
-,p_column_alias=>'ELAPSED_SECONDS'
+,p_column_alias=>'TIME_ELAPSED'
 ,p_column_display_sequence=>3
-,p_column_heading=>'Elapsed Seconds'
-,p_column_alignment=>'RIGHT'
-,p_heading_alignment=>'RIGHT'
+,p_column_heading=>'Time Elapsed'
+,p_use_as_row_header=>'N'
+,p_disable_sort_column=>'N'
+,p_derived_column=>'N'
+,p_include_in_export=>'Y'
 );
 wwv_flow_api.create_report_columns(
  p_id=>wwv_flow_api.id(81088646999525715)
@@ -8025,12 +8027,10 @@ wwv_flow_api.create_report_columns(
 ,p_column_alias=>'PERCENT'
 ,p_column_display_sequence=>4
 ,p_column_heading=>'Percent'
-,p_use_as_row_header=>'N'
-,p_column_format=>'PCT_GRAPH:cccccc:777777:150'
+,p_column_format=>'PCT_GRAPH:#cccccc:#777777:150'
 ,p_heading_alignment=>'LEFT'
 ,p_display_as=>'WITHOUT_MODIFICATION'
-,p_lov_show_nulls=>'YES'
-,p_lov_display_extra=>'YES'
+,p_derived_column=>'N'
 ,p_include_in_export=>'Y'
 );
 wwv_flow_api.create_page_button(
@@ -9526,8 +9526,8 @@ wwv_flow_api.create_install_script(
 '	);',
 '',
 '	PROCEDURE Expand_Zip_Range (',
-'		p_Start_ID INTEGER DEFAULT NULL,',
-'		p_End_ID INTEGER DEFAULT NULL,',
+'		p_Start_ID 			INTEGER DEFAULT NULL,	-- id range start.  Lower limit. when not empty this procedure is called by dbms_parallel_execute.',
+'		p_End_ID 			INTEGER DEFAULT NULL,	-- id range end. Upper limit.',
 '		p_Init_Session_Code VARCHAR2 DEFAULT NULL,',
 '		p_Load_Zip_Code 	VARCHAR2 DEFAULT NULL,',
 '		p_Load_Zip_Query	VARCHAR2 DEFAULT NULL,',
@@ -10103,12 +10103,24 @@ wwv_flow_api.create_install_script(
 '		-- :folder_id, :unzipped_file, :file_name, :file_date, :file_size, :mime_type',
 '		v_cur := dbms_sql.open_cursor;',
 '		dbms_sql.parse(v_cur, ''begin '' || p_Save_File_Code || '' end;'', DBMS_SQL.NATIVE);',
-'		dbms_sql.bind_variable(v_cur, '':folder_id'', p_Folder_Id);',
-'		dbms_sql.bind_variable(v_cur, '':unzipped_file'', p_unzipped_file);',
-'		dbms_sql.bind_variable(v_cur, '':file_name'', p_File_Name);',
-'		dbms_sql.bind_variable(v_cur, '':file_date'', p_File_Date);',
-'		dbms_sql.bind_variable(v_cur, '':file_size'', p_File_Size);',
-'		dbms_sql.bind_variable(v_cur, '':mime_type'', p_Mime_Type);',
+'		if instr(p_Save_File_Code, '':folder_id'') > 0 then',
+'			dbms_sql.bind_variable(v_cur, '':folder_id'', p_Folder_Id);',
+'		end if;',
+'		if instr(p_Save_File_Code, '':unzipped_file'') > 0 then',
+'			dbms_sql.bind_variable(v_cur, '':unzipped_file'', p_unzipped_file);',
+'		end if;',
+'		if instr(p_Save_File_Code, '':file_name'') > 0 then',
+'			dbms_sql.bind_variable(v_cur, '':file_name'', p_File_Name);',
+'		end if;',
+'		if instr(p_Save_File_Code, '':file_date'') > 0 then',
+'			dbms_sql.bind_variable(v_cur, '':file_date'', p_File_Date);',
+'		end if;',
+'		if instr(p_Save_File_Code, '':file_size'') > 0 then',
+'			dbms_sql.bind_variable(v_cur, '':file_size'', p_File_Size);',
+'		end if;',
+'		if instr(p_Save_File_Code, '':mime_type'') > 0 then',
+'			dbms_sql.bind_variable(v_cur, '':mime_type'', p_Mime_Type);',
+'		end if;',
 '		v_rows := dbms_sql.execute(v_cur);',
 '		dbms_sql.close_cursor(v_cur);',
 '	exception',
@@ -10185,7 +10197,15 @@ wwv_flow_api.create_install_script(
 '		v_File_Date		DATE;',
 '		v_Archive_Name 	as_zip.t_path_name;',
 '		v_Parent_Folder	as_zip.t_path_name;',
-'		v_Full_Path 	as_zip.t_path_name;',
+'		v_Full_Path 	as_zip.t_path_'))
+);
+end;
+/
+begin
+wwv_flow_api.append_to_install_script(
+ p_id=>wwv_flow_api.id(81192547075153663)
+,p_script_clob=>wwv_flow_utilities.join(wwv_flow_t_varchar2(
+'name;',
 '		v_File_Path 	as_zip.t_path_name;',
 '		v_Last_Path 	as_zip.t_path_name := '' '';',
 '		v_Mime_Type		VARCHAR2(4000);',
@@ -10215,15 +10235,7 @@ wwv_flow_api.create_install_script(
 '		if p_Create_Path_Code IS NOT NULL and p_Parent_Folder IS NOT NULL then -- get Root_id',
 '			v_Parent_Folder := Root_Path(p_Parent_Folder);',
 '			v_Folder_Id := NULL;',
-'			execute immediate ''begin :folder_id := '' || p_Create_Path_Cod'))
-);
-end;
-/
-begin
-wwv_flow_api.append_to_install_script(
- p_id=>wwv_flow_api.id(81192547075153663)
-,p_script_clob=>wwv_flow_utilities.join(wwv_flow_t_varchar2(
-'e || ''; end;''',
+'			execute immediate ''begin :folder_id := '' || p_Create_Path_Code || ''; end;''',
 '				using out v_root_id, v_Parent_Folder, v_Folder_Id;',
 '			v_Folder_Id := v_root_id;',
 '			-- dbms_output.put_line(''Parent_Folder B: '' || v_Parent_Folder || '', id : '' || v_root_id);',
@@ -10277,7 +10289,9 @@ wwv_flow_api.append_to_install_script(
 '					-- Save_File (:unzipped_file, :file_name, :file_date, :file_size, :mime_type, :folder_id));',
 '					Save_Unzipped_File( p_Save_File_Code,',
 '						v_Folder_Id, v_unzipped_file, v_File_Name, v_File_Date, v_File_Size, v_Mime_Type);',
-'					commit;',
+'					if p_Start_ID IS NOT NULL then 	-- when not empty this procedure is called by dbms_parallel_execute.',
+'						commit;						-- release locks in parallel mode to avoid contention',
+'					end if;',
 '				end if;',
 '			end if;',
 '		end loop;',
@@ -10463,6 +10477,7 @@ wwv_flow_api.append_to_install_script(
 '					p_Skip_Dot => p_Skip_Dot,',
 '					p_Encoding => v_encoding',
 '			);',
+'			commit; -- create files and folders finished',
 '			p_SQLCode := 0;',
 '		end if;',
 '	end Expand_Zip_Archive;',
@@ -10595,10 +10610,10 @@ wwv_flow_api.create_install_script(
 '*/',
 '',
 'CREATE OR REPLACE VIEW VUNZIP_PARALLEL_PROGRESS (',
-'	MESSAGE, TIME_REMAINING, ELAPSED_SECONDS, PERCENT, TARGET_DESC',
+'	MESSAGE, TIME_REMAINING, TIME_ELAPSED, PERCENT, TARGET_DESC',
 ')',
 'AS -- Support for monitoring',
-'SELECT REPLACE(MESSAGE, TARGET_DESC) MESSAGE,',
+'SELECT REPLACE(MESSAGE, OPNAME ||'': ''|| TARGET_DESC, OPNAME) MESSAGE,',
 '    TRUNC(TIME_REMAINING / 3600)',
 '    || '':'' || LPAD(MOD(TRUNC(TIME_REMAINING / 60), 60), 2, ''0'')',
 '    || '':'' || LPAD(MOD(TIME_REMAINING, 60), 2, ''0'') TIME_REMAINING,',
@@ -10615,6 +10630,7 @@ wwv_flow_api.create_install_script(
 ';',
 '',
 '',
+'',
 '-- Demo Schema',
 'CREATE SEQUENCE DEMO_FOLDERS_SEQ;',
 '',
@@ -10623,7 +10639,7 @@ wwv_flow_api.create_install_script(
 '	PARENT_ID NUMBER,',
 '	FOLDER_NAME VARCHAR2(200) NOT NULL ENABLE,',
 '	CONSTRAINT DEMO_FOLDERS_PK PRIMARY KEY (ID),',
-'	CONSTRAINT DEMO_FOLDERS_FK FOREIGN KEY (PARENT_ID) REFERENCES DEMO_FOLDERS(ID),',
+'	CONSTRAINT DEMO_FOLDERS_FK FOREIGN KEY (PARENT_ID) REFERENCES DEMO_FOLDERS(ID) ON DELETE CASCADE,',
 '	CONSTRAINT DEMO_FOLDERS_UK UNIQUE (PARENT_ID, FOLDER_NAME)',
 ');',
 '',
@@ -10638,7 +10654,7 @@ wwv_flow_api.create_install_script(
 '	MIME_TYPE VARCHAR2(300),',
 '	FOLDER_ID NUMBER,',
 '	CONSTRAINT DEMO_FILES_PK PRIMARY KEY (ID),',
-'	CONSTRAINT DEMO_FILES_FK FOREIGN KEY (FOLDER_ID) REFERENCES DEMO_FOLDERS(ID),',
+'	CONSTRAINT DEMO_FILES_FK FOREIGN KEY (FOLDER_ID) REFERENCES DEMO_FOLDERS(ID) ON DELETE CASCADE,',
 '	CONSTRAINT DEMO_FILES_UK UNIQUE (FOLDER_ID, FILE_NAME)',
 ');',
 '',
@@ -10649,7 +10665,7 @@ wwv_flow_api.create_install_script(
 '	p_File_ID 			INTEGER,',
 '	p_Parent_Folder 	VARCHAR2 DEFAULT ''/Home'',',
 '	p_Execute_Parallel 	BOOLEAN DEFAULT true',
-')',
+') -- this procedure is called on demand by an ajax request',
 'AUTHID DEFINER',
 'is',
 '	v_message			VARCHAR2(4000);',
@@ -10685,19 +10701,19 @@ wwv_flow_api.create_install_script(
 'end;',
 '/',
 '',
-'-- for performance comparison with the provided library APEX_ZIP from Oracle',
+'',
 'CREATE OR REPLACE PROCEDURE Expand_Apex_Zip_Job (',
 '	p_File_ID 			INTEGER,',
 '	p_Parent_Folder 	VARCHAR2 DEFAULT ''/Home''',
 ')',
 'AUTHID DEFINER',
-'is',
+'is -- for performance comparison with the provided library APEX_ZIP from Oracle',
 '	v_zip_file blob;',
 '	v_unzipped_file blob;',
 '	v_files apex_zip.t_files;',
 '	v_Full_Path 	VARCHAR2(4000);',
 '	v_File_Name 	VARCHAR2(4000);',
-'	v_Folder_query  VARCHAR2(4000) := ''SELECT ID, PARENT_ID, FOLDER_NAME FROM DEMO_FOLDERS'';',
+'	v_Folder_query  VARCHAR2(4000);',
 '	v_Save_File_Code VARCHAR2(4000);',
 '	v_root_id 		INTEGER;',
 '	v_Folder_Id		INTEGER;',
@@ -10739,26 +10755,6 @@ wwv_flow_api.create_install_script(
 '	commit;',
 'end;',
 '/',
-'',
-'',
-'/*',
-'',
-'exec Expand_Demo_Files_Job(1, ''/Home'', true);',
-'--',
-'delete from DEMO_FILES where ID not in ( 1 ) or FOLDER_ID IS NULL;',
-'delete from DEMO_FOLDERS t where NOT EXISTS (select 1 from DEMO_FILES s where s.folder_id = t.id) ;',
-'commit;',
-'',
-'exec Expand_Zip_Apex_Job(1, ''/Home'');',
-'',
-'',
-'--',
-'DROP TABLE DEMO_FILES;',
-'DROP TABLE DEMO_FOLDERS;',
-'DROP SEQUENCE DEMO_FOLDERS_SEQ;',
-'DROP SEQUENCE DEMO_FILES_SEQ;',
-'*/',
-'',
 ''))
 );
 end;

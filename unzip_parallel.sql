@@ -76,8 +76,8 @@ is
 	);
 
 	PROCEDURE Expand_Zip_Range (
-		p_Start_ID INTEGER DEFAULT NULL,
-		p_End_ID INTEGER DEFAULT NULL,
+		p_Start_ID 			INTEGER DEFAULT NULL,	-- id range start.  Lower limit. when not empty this procedure is called by dbms_parallel_execute.
+		p_End_ID 			INTEGER DEFAULT NULL,	-- id range end. Upper limit.
 		p_Init_Session_Code VARCHAR2 DEFAULT NULL,
 		p_Load_Zip_Code 	VARCHAR2 DEFAULT NULL,
 		p_Load_Zip_Query	VARCHAR2 DEFAULT NULL,
@@ -653,12 +653,24 @@ is
 		-- :folder_id, :unzipped_file, :file_name, :file_date, :file_size, :mime_type
 		v_cur := dbms_sql.open_cursor;
 		dbms_sql.parse(v_cur, 'begin ' || p_Save_File_Code || ' end;', DBMS_SQL.NATIVE);
-		dbms_sql.bind_variable(v_cur, ':folder_id', p_Folder_Id);
-		dbms_sql.bind_variable(v_cur, ':unzipped_file', p_unzipped_file);
-		dbms_sql.bind_variable(v_cur, ':file_name', p_File_Name);
-		dbms_sql.bind_variable(v_cur, ':file_date', p_File_Date);
-		dbms_sql.bind_variable(v_cur, ':file_size', p_File_Size);
-		dbms_sql.bind_variable(v_cur, ':mime_type', p_Mime_Type);
+		if instr(p_Save_File_Code, ':folder_id') > 0 then
+			dbms_sql.bind_variable(v_cur, ':folder_id', p_Folder_Id);
+		end if;
+		if instr(p_Save_File_Code, ':unzipped_file') > 0 then
+			dbms_sql.bind_variable(v_cur, ':unzipped_file', p_unzipped_file);
+		end if;
+		if instr(p_Save_File_Code, ':file_name') > 0 then
+			dbms_sql.bind_variable(v_cur, ':file_name', p_File_Name);
+		end if;
+		if instr(p_Save_File_Code, ':file_date') > 0 then
+			dbms_sql.bind_variable(v_cur, ':file_date', p_File_Date);
+		end if;
+		if instr(p_Save_File_Code, ':file_size') > 0 then
+			dbms_sql.bind_variable(v_cur, ':file_size', p_File_Size);
+		end if;
+		if instr(p_Save_File_Code, ':mime_type') > 0 then
+			dbms_sql.bind_variable(v_cur, ':mime_type', p_Mime_Type);
+		end if;
 		v_rows := dbms_sql.execute(v_cur);
 		dbms_sql.close_cursor(v_cur);
 	exception
@@ -819,7 +831,9 @@ is
 					-- Save_File (:unzipped_file, :file_name, :file_date, :file_size, :mime_type, :folder_id));
 					Save_Unzipped_File( p_Save_File_Code,
 						v_Folder_Id, v_unzipped_file, v_File_Name, v_File_Date, v_File_Size, v_Mime_Type);
-					commit;
+					if p_Start_ID IS NOT NULL then 	-- when not empty this procedure is called by dbms_parallel_execute.
+						commit;						-- release locks in parallel mode to avoid contention
+					end if;
 				end if;
 			end if;
 		end loop;
@@ -1005,6 +1019,7 @@ is
 					p_Skip_Dot => p_Skip_Dot,
 					p_Encoding => v_encoding
 			);
+			commit; -- create files and folders finished
 			p_SQLCode := 0;
 		end if;
 	end Expand_Zip_Archive;

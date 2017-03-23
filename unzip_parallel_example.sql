@@ -70,7 +70,7 @@ CREATE OR REPLACE PROCEDURE Expand_Demo_Files_Job (
 	p_File_ID 			INTEGER,
 	p_Parent_Folder 	VARCHAR2 DEFAULT '/Home',
 	p_Execute_Parallel 	BOOLEAN DEFAULT true
-)
+) -- this procedure is called on demand by an ajax request
 AUTHID DEFINER
 is
 	v_message			VARCHAR2(4000);
@@ -106,19 +106,19 @@ begin
 end;
 /
 
--- for performance comparison with the provided library APEX_ZIP from Oracle
+
 CREATE OR REPLACE PROCEDURE Expand_Apex_Zip_Job (
 	p_File_ID 			INTEGER,
 	p_Parent_Folder 	VARCHAR2 DEFAULT '/Home'
 )
 AUTHID DEFINER
-is
+is -- for performance comparison with the provided library APEX_ZIP from Oracle
 	v_zip_file blob;
 	v_unzipped_file blob;
 	v_files apex_zip.t_files;
 	v_Full_Path 	VARCHAR2(4000);
 	v_File_Name 	VARCHAR2(4000);
-	v_Folder_query  VARCHAR2(4000) := 'SELECT ID, PARENT_ID, FOLDER_NAME FROM DEMO_FOLDERS';
+	v_Folder_query  VARCHAR2(4000);
 	v_Save_File_Code VARCHAR2(4000);
 	v_root_id 		INTEGER;
 	v_Folder_Id		INTEGER;

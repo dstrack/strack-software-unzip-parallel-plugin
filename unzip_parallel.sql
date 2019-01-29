@@ -52,7 +52,8 @@ is
 	function Create_Path (
 		p_Path_Name		VARCHAR2,
 		p_Root_Id 		INTEGER,
-		p_Folder_query 	VARCHAR2
+		p_Folder_query 	VARCHAR2,
+		p_Container_ID 	NUMBER DEFAULT NULL
 	) return INTEGER;
 
 	function Mime_Type_from_Extension(
@@ -76,8 +77,8 @@ is
 	);
 
 	PROCEDURE Expand_Zip_Range (
-		p_Start_ID 			INTEGER DEFAULT NULL,	-- id range start.  Lower limit. when not empty this procedure is called by dbms_parallel_execute.
-		p_End_ID 			INTEGER DEFAULT NULL,	-- id range end. Upper limit.
+		p_Start_ID INTEGER DEFAULT NULL,
+		p_End_ID INTEGER DEFAULT NULL,
 		p_Init_Session_Code VARCHAR2 DEFAULT NULL,
 		p_Load_Zip_Code 	VARCHAR2 DEFAULT NULL,
 		p_Load_Zip_Query	VARCHAR2 DEFAULT NULL,
@@ -86,6 +87,7 @@ is
 		p_Filter_Path_Cond 	VARCHAR2 DEFAULT 'true',
 		p_Save_File_Code 	VARCHAR2,
 		p_Parent_Folder 	VARCHAR2 DEFAULT NULL,
+		p_Context  			BINARY_INTEGER DEFAULT 0,
 		p_Only_Files 		BOOLEAN DEFAULT TRUE,
 		p_Skip_Empty 		BOOLEAN DEFAULT TRUE,
 		p_Skip_Dot 			BOOLEAN DEFAULT TRUE,
@@ -100,8 +102,10 @@ is
 		p_Folder_query 		VARCHAR2 DEFAULT NULL,	-- SQL Query for parameters to store the folders in a recursive tree table. When this field is empty, the :file_name will be prefixed with the path in the Save file code.
 		p_Create_Path_Code 	VARCHAR2 DEFAULT NULL,	-- PL/SQL code to save the path of the saved files.
 		p_Filter_Path_Cond 	VARCHAR2 DEFAULT 'true',-- Condition to filter the folders that are extracted from the zip archive. The bind variable :path_name delivers path names like /root/sub1/sub2/ to the expression.
-		p_Save_File_Code 	VARCHAR2,				-- PL/SQL code to save an unzipped file from the zip archive. The bind variables :unzipped_file, and optionally :file_name, :file_date, :file_size, :mime_type, :folder_id deliver values to be saved.
+		p_Save_File_Code 	VARCHAR2,				-- PL/SQL code to save an unzipped file from the zip archive. The bind variables :unzipped_file, :file_name, :file_date, :file_size, :mime_type, :folder_id deliver values to be saved.
 		p_Parent_Folder 	VARCHAR2 DEFAULT NULL,	-- Pathname of the Directory where the unzipped files are saved.
+		p_Container_ID		NUMBER  DEFAULT NULL,   -- folder table foreign key reference value to container table
+		p_Context  			BINARY_INTEGER DEFAULT 0,
 		p_Only_Files 		BOOLEAN DEFAULT TRUE,	-- If set to Yes, empty directory entries are not created. Otherwise, set to No to include empty directory entries..
 		p_Skip_Empty 		BOOLEAN DEFAULT TRUE,	-- If set to Yes, then empty files are skipped and not saved.
 		p_Skip_Dot 			BOOLEAN DEFAULT TRUE,	-- If set to Yes, then files with a file name that start with '.' are skipped and not saved.
@@ -111,6 +115,18 @@ is
 		p_Message 			OUT NOCOPY VARCHAR2
 	);
 
+	PROCEDURE Expand_Zip_Archive_Job (
+		p_Init_Session_Code VARCHAR2 DEFAULT NULL,	-- PL/SQL code for initialization of session context.
+		p_Load_Zip_Query	VARCHAR2,	-- SQL Query for loading the zipped blob and filename. The bind variable :search_value or an page item name can be used to bind to the Page Item provided by the Search Item Attribute.
+		p_File_Names		VARCHAR2,	-- file names for the bind variable in the Load Zip Query code.
+		p_Folder_query 		VARCHAR2,	-- SQL Query for parameters to store the folders in a recursive tree table. When this field is empty, the :file_name will be prefixed with the path in the Save file code.
+		p_Filter_Path_Cond 	VARCHAR2 DEFAULT 'true',-- Condition to filter the folders that are extracted from the zip archive. The bind variable :path_name delivers path names like /root/sub1/sub2/ to the expression.
+		p_Save_File_Code 	VARCHAR2,				-- PL/SQL code to save an unzipped file from the zip archive. The bind variables :unzipped_file, :file_name, :file_date, :file_size, :mime_type, :folder_id deliver values to be saved.
+		p_Parent_Folder 	VARCHAR2 DEFAULT NULL,	-- Pathname of the Directory where the unzipped files are saved.
+		p_Container_ID		NUMBER  DEFAULT NULL,   -- folder table foreign key reference value to container table
+		p_Context  			BINARY_INTEGER DEFAULT 0
+	);
+	
 end Unzip_Parallel;
 /
 show errors
@@ -220,7 +236,8 @@ is
 		p_Folder_query IN VARCHAR2,
 		p_Folder_ID_Col  	OUT NOCOPY VARCHAR2,	-- Column Name of the Primary Key in the tree table.
 		p_Parent_ID_Col  	OUT NOCOPY VARCHAR2,	-- Column Name of the Foreign Key in the tree table.
-		p_Folder_Name_Col 	OUT NOCOPY VARCHAR2	-- Column Name of the Folder Name in the tree table.
+		p_Folder_Name_Col 	OUT NOCOPY VARCHAR2,	-- Column Name of the Folder Name in the tree table.
+		p_Container_ID_Col	OUT NOCOPY VARCHAR2
 	)
 	is
 		v_cur INTEGER;
@@ -234,9 +251,10 @@ is
 		/* for j in 1..v_col_cnt loop
 			-- dbms_output.put_line('col_name: ' || v_rec_tab(j).col_name || ', type: ' || v_rec_tab(j).col_type);
 		end loop; */
-		p_Folder_ID_Col := v_rec_tab(1).col_name;
-		p_Parent_ID_Col := v_rec_tab(2).col_name;
-		p_Folder_Name_Col := v_rec_tab(3).col_name;
+		p_Folder_ID_Col := case when v_col_cnt >= 1 then v_rec_tab(1).col_name end;
+		p_Parent_ID_Col := case when v_col_cnt >= 2 then v_rec_tab(2).col_name end;
+		p_Folder_Name_Col := case when v_col_cnt >= 3 then v_rec_tab(3).col_name end;
+		p_Container_ID_Col := case when v_col_cnt >= 4 then v_rec_tab(4).col_name end;
 
 		dbms_sql.close_cursor(v_cur);
 	exception
@@ -248,11 +266,13 @@ is
 	FUNCTION Create_Path (
 		p_Path_Name		VARCHAR2,
 		p_Root_Id 		INTEGER,
-		p_Folder_query 	VARCHAR2
+		p_Folder_query 	VARCHAR2,
+		p_Container_ID 	NUMBER DEFAULT NULL
 	) return INTEGER
 	is
 		v_Folder_ID_Col	VARCHAR2(128);
 		v_Parent_ID_Col	VARCHAR2(128);
+		v_Container_ID_Col	VARCHAR2(128);
 		v_Folder_Name_Col	VARCHAR2(128);
 		v_statment 	VARCHAR2(4000);
 		v_path 		as_zip.t_path_name;
@@ -270,7 +290,8 @@ is
 			p_Folder_query => p_Folder_query,
 			p_Folder_ID_Col => v_Folder_ID_Col,
 			p_Parent_ID_Col => v_Parent_ID_Col,
-			p_Folder_Name_Col => v_Folder_Name_Col
+			p_Folder_Name_Col => v_Folder_Name_Col,
+			p_Container_ID_Col => v_Container_ID_Col
 		);
 		v_statment :=
 		'SELECT ' || dbms_assert.enquote_name(v_Folder_ID_Col) || chr(10) ||
@@ -279,6 +300,9 @@ is
 			'SELECT ' || dbms_assert.enquote_name(v_Folder_ID_Col) || ', SYS_CONNECT_BY_PATH(TRANSLATE(' ||
 					dbms_assert.enquote_name(v_Folder_Name_Col) || ', ''/'', ''-''), ''/'') PATH' || chr(10) ||
 			'FROM (' || p_Folder_query || ') T ' || chr(10) ||
+			case when v_Container_ID_Col IS NOT NULL then 
+				'WHERE ' || dbms_assert.enquote_name(v_Container_ID_Col) || ' = ' || dbms_assert.enquote_literal(p_Container_ID) || chr(10) 
+			end ||
 			'START WITH (' || dbms_assert.enquote_name(v_Parent_ID_Col) || ' = :root_id ' ||
 				   ' OR ' || dbms_assert.enquote_name(v_Parent_ID_Col) || ' IS NULL AND :root_id IS NULL )' || chr(10) ||
 			'CONNECT BY ' || dbms_assert.enquote_name(v_Parent_ID_Col) || ' = PRIOR ' || dbms_assert.enquote_name(v_Folder_ID_Col) ||
@@ -313,16 +337,32 @@ is
 					using out v_folder_id, v_root_id, v_folder_name;
 			exception
 			  when NO_DATA_FOUND then
-				v_statment :=
-				'INSERT INTO (' || p_Folder_query || ') T ' ||
-				' (' || dbms_assert.enquote_name(v_Folder_Name_Col) ||
-				', ' || dbms_assert.enquote_name(v_Parent_ID_Col) || ')' || chr(10) ||
-				'VALUES (:folder_name, :parent_id)' || chr(10) ||
-				'RETURNING ' || dbms_assert.enquote_name(v_Folder_ID_Col) || ' INTO :folder_id';
-				-- dbms_output.put_line('----------');
-				-- dbms_output.put_line(v_statment);
-				execute immediate 'begin ' || v_statment || '; end;'
-					using v_folder_name, v_root_id, out v_folder_id;
+			  	if v_Container_ID_Col IS NOT NULL then 
+					v_statment :=
+					'INSERT INTO (' || p_Folder_query || ') T ' ||
+					' (' || dbms_assert.enquote_name(v_Folder_Name_Col) ||
+					', ' || dbms_assert.enquote_name(v_Parent_ID_Col) || 
+					', ' || dbms_assert.enquote_name(v_Container_ID_Col) ||
+					')' || chr(10) ||
+					'VALUES (:folder_name, :parent_id, :container_id)' || chr(10) ||
+					'RETURNING ' || dbms_assert.enquote_name(v_Folder_ID_Col) || ' INTO :folder_id';
+					-- dbms_output.put_line('----------');
+					-- dbms_output.put_line(v_statment);
+					execute immediate 'begin ' || v_statment || '; end;'
+						using v_folder_name, v_root_id, p_Container_ID, out v_folder_id;
+				else
+					v_statment :=
+					'INSERT INTO (' || p_Folder_query || ') T ' ||
+					' (' || dbms_assert.enquote_name(v_Folder_Name_Col) ||
+					', ' || dbms_assert.enquote_name(v_Parent_ID_Col) || 
+					')' || chr(10) ||
+					'VALUES (:folder_name, :parent_id)' || chr(10) ||
+					'RETURNING ' || dbms_assert.enquote_name(v_Folder_ID_Col) || ' INTO :folder_id';
+					-- dbms_output.put_line('----------');
+					-- dbms_output.put_line(v_statment);
+					execute immediate 'begin ' || v_statment || '; end;'
+						using v_folder_name, v_root_id, out v_folder_id;
+				end if;
 			end;
 		end loop;
 		-- dbms_output.put_line('new folder_id: ' || v_folder_id);
@@ -731,6 +771,7 @@ is
 		p_Filter_Path_Cond 	VARCHAR2 DEFAULT 'true',
 		p_Save_File_Code 	VARCHAR2,
 		p_Parent_Folder 	VARCHAR2 DEFAULT NULL,
+		p_Context  			BINARY_INTEGER DEFAULT 0,
 		p_Only_Files 		BOOLEAN DEFAULT TRUE,
 		p_Skip_Empty 		BOOLEAN DEFAULT TRUE,
 		p_Skip_Dot 			BOOLEAN DEFAULT TRUE,
@@ -742,7 +783,7 @@ is
 		v_file_list		as_zip.file_list;
 		v_date_list		as_zip.date_list;
 	    v_offset_list 	as_zip.foffset_list;
-	    v_filter_result	BOOLEAN;
+	    v_filter_result	BINARY_INTEGER;
 		v_File_Name 	as_zip.t_path_name;
 		v_File_Date		DATE;
 		v_Archive_Name 	as_zip.t_path_name;
@@ -792,7 +833,7 @@ is
 			  slno         => v_slno,
 			  op_name      => Unzip_Parallel.c_Process_Name,
 			  target       => 0,
-			  context      => 0,
+			  context      => p_Context,
 			  sofar        => i - v_Start_ID + 1,
 			  totalwork    => v_End_ID - v_Start_ID + 1,
 			  target_desc  => SUBSTR(p_Search_Value, 1, 64),
@@ -801,10 +842,14 @@ is
 			v_Full_Path := v_file_list(i);
 			v_File_Date := v_date_list(i);
 			-- :filter_result := INSTR(:path_name, '__MACOSX/') != 1;
-			execute immediate 'begin :filter_result := ' || p_Filter_Path_Cond || '; end;'
+			execute immediate 'begin :filter_result := case when ' || p_Filter_Path_Cond || ' then 1 else 0 end; end;'
 				using out v_filter_result, v_Full_Path;
-			if v_filter_result then
-				v_unzipped_file := as_zip.get_file (v_zipped_blob, v_Full_Path, v_offset_list(i));
+			if v_filter_result = 1 then
+				v_unzipped_file := as_zip.get_file (
+					p_zipped_blob => v_zipped_blob, 
+					p_file_name => v_Full_Path, 
+					p_offset => v_offset_list(i)
+				);
 				if p_Create_Path_Code IS NOT NULL then
 					v_File_Path := NVL(SUBSTR(v_Full_Path, 1, INSTR(v_Full_Path, '/', -1)), ' ');
 					v_File_Path := Prefix_File_Path(v_Archive_Name, v_File_Path);
@@ -846,6 +891,7 @@ is
 		p_Create_Path_Code 	VARCHAR2 DEFAULT NULL,	-- PL/SQL code to save the path of the saved files.
 		p_Filter_Path_Cond 	VARCHAR2 DEFAULT 'true',-- Condition to filter the folders that are extracted from the zip archive. The bind variable :path_name delivers path names like /root/sub1/sub2/ to the expression.
 		p_Parent_Folder 	VARCHAR2 DEFAULT NULL,	-- Pathname of the Directory where the unzipped files are saved.
+		p_Context  			BINARY_INTEGER DEFAULT 0,
 		p_Only_Files 		BOOLEAN DEFAULT TRUE,	-- If set to Yes, empty directory entries are not created. Otherwise, set to No to include empty directory entries..
 		p_Encoding			IN OUT NOCOPY VARCHAR2, -- This is the encoding used to zip the file. (AL32UTF8 or US8PC437)
 		p_File_Size			OUT INTEGER,
@@ -863,7 +909,7 @@ is
 		v_folders_limit CONSTANT INTEGER := 1000;
 		v_folder_list	as_zip.file_list;
 		v_Full_Path 	as_zip.t_path_name;
-	    v_filter_result	BOOLEAN;
+	    v_filter_result	BINARY_INTEGER;
         v_Folder_Id		INTEGER;
         v_rindex 		BINARY_INTEGER := dbms_application_info.set_session_longops_nohint;
         v_slno   		BINARY_INTEGER;
@@ -904,7 +950,7 @@ is
 				  slno         => v_slno,
 				  op_name      => Unzip_Parallel.c_Process_Name,
 				  target       => 0,
-				  context      => 0,
+				  context      => p_Context,
 				  sofar        => i,
 				  totalwork    => v_folder_list.count,
 				  target_desc  => SUBSTR(p_Search_Value, 1, 64),
@@ -913,9 +959,9 @@ is
 			end if;
 			v_Full_Path := v_folder_list(i);
 			-- :filter_result := INSTR(:path_name, '__MACOSX/') != 1;
-			execute immediate 'begin :filter_result := ' || p_Filter_Path_Cond || '; end;'
+			execute immediate 'begin :filter_result := case when ' || p_Filter_Path_Cond || ' then 1 else 0 end; end;'
 				using out v_filter_result, v_Full_Path;
-			if v_filter_result then
+			if v_filter_result = 1 then
 				-- :folder_id := Unzip_Parallel.Create_Path (:path_name, :root_id);
 				v_Full_Path := Prefix_File_Path(v_Archive_Name, v_Full_Path);
 				execute immediate 'begin :folder_id := ' || p_Create_Path_Code || '; end;'
@@ -935,6 +981,8 @@ is
 		p_Filter_Path_Cond 	VARCHAR2 DEFAULT 'true',-- Condition to filter the folders that are extracted from the zip archive. The bind variable :path_name delivers path names like /root/sub1/sub2/ to the expression.
 		p_Save_File_Code 	VARCHAR2,				-- PL/SQL code to save an unzipped file from the zip archive. The bind variables :unzipped_file, :file_name, :file_date, :file_size, :mime_type, :folder_id deliver values to be saved.
 		p_Parent_Folder 	VARCHAR2 DEFAULT NULL,	-- Pathname of the Directory where the unzipped files are saved.
+		p_Container_ID		NUMBER  DEFAULT NULL,   -- folder table foreign key reference value to container table
+		p_Context  			BINARY_INTEGER DEFAULT 0,
 		p_Only_Files 		BOOLEAN DEFAULT TRUE,	-- If set to Yes, empty directory entries are not created. Otherwise, set to No to include empty directory entries..
 		p_Skip_Empty 		BOOLEAN DEFAULT TRUE,	-- If set to Yes, then empty files are skipped and not saved.
 		p_Skip_Dot 			BOOLEAN DEFAULT TRUE,	-- If set to Yes, then files with a file name that start with '.' are skipped and not saved.
@@ -955,7 +1003,10 @@ is
 			execute immediate 'begin ' || p_Init_Session_Code || ' end;';
 		end if;
 		if p_Folder_query IS NOT NULL then
-			v_Create_Path_Code := 'Unzip_Parallel.Create_Path(:path_name, :root_id, ' || 'q''[' || p_Folder_query|| ']'')';
+			v_Create_Path_Code := 'Unzip_Parallel.Create_Path(:path_name, :root_id, ' 
+			|| 'q''[' || p_Folder_query|| ']'', ' 
+			|| dbms_assert.enquote_literal(p_Container_ID) 
+			|| ')';
 		else
 			v_Create_Path_Code := p_Create_Path_Code;
 		end if;
@@ -969,6 +1020,7 @@ is
 						p_Create_Path_Code 	=> v_Create_Path_Code,
 						p_Filter_Path_Cond 	=> p_Filter_Path_Cond,
 						p_Parent_Folder		=> p_Parent_Folder,
+						p_Context			=> p_Context,
 						p_Only_Files		=> p_Only_Files,
 						p_Encoding			=> v_encoding,
 						p_File_Size			=> v_file_size,
@@ -994,6 +1046,7 @@ is
 				|| case when p_Filter_Path_Cond IS NOT NULL then 'p_Filter_Path_Cond => q''{' || p_Filter_Path_Cond || '}'',' || chr(10) end
 				|| 'p_Save_File_Code => q''{' || p_Save_File_Code || '}'',' || chr(10)
 				|| case when p_Parent_Folder IS NOT NULL then 'p_Parent_Folder => q''{' || p_Parent_Folder || '}'',' || chr(10) end
+				|| 'p_Context => ' || p_Context || ',' || chr(10)
 				|| 'p_Only_Files => ' || case when p_Only_Files then 'true' else 'false' end || ',' || chr(10)
 				|| 'p_Skip_Empty => ' || case when p_Skip_Empty then 'true' else 'false' end || ',' || chr(10)
 				|| 'p_Skip_Dot => ' || case when p_Skip_Dot then 'true' else 'false' end || ',' || chr(10)
@@ -1014,6 +1067,7 @@ is
 					p_Filter_Path_Cond => p_Filter_Path_Cond,
 					p_Save_File_Code => p_Save_File_Code,
 					p_Parent_Folder => p_Parent_Folder,
+					p_Context => p_Context,
 					p_Only_Files => p_Only_Files,
 					p_Skip_Empty => p_Skip_Empty,
 					p_Skip_Dot => p_Skip_Dot,
@@ -1024,6 +1078,53 @@ is
 		end if;
 	end Expand_Zip_Archive;
 
+	PROCEDURE Expand_Zip_Archive_Job (
+		p_Init_Session_Code VARCHAR2 DEFAULT NULL,	-- PL/SQL code for initialization of session context.
+		p_Load_Zip_Query	VARCHAR2,	-- SQL Query for loading the zipped blob and filename. The bind variable :search_value or an page item name can be used to bind to the Page Item provided by the Search Item Attribute.
+		p_File_Names		VARCHAR2,	-- file names for the bind variable in the Load Zip Query code.
+		p_Folder_query 		VARCHAR2,	-- SQL Query for parameters to store the folders in a recursive tree table. When this field is empty, the :file_name will be prefixed with the path in the Save file code.
+		p_Filter_Path_Cond 	VARCHAR2 DEFAULT 'true',-- Condition to filter the folders that are extracted from the zip archive. The bind variable :path_name delivers path names like /root/sub1/sub2/ to the expression.
+		p_Save_File_Code 	VARCHAR2,				-- PL/SQL code to save an unzipped file from the zip archive. The bind variables :unzipped_file, :file_name, :file_date, :file_size, :mime_type, :folder_id deliver values to be saved.
+		p_Parent_Folder 	VARCHAR2 DEFAULT NULL,	-- Pathname of the Directory where the unzipped files are saved.
+		p_Container_ID		NUMBER  DEFAULT NULL,   -- folder table foreign key reference value to container table
+		p_Context  			BINARY_INTEGER DEFAULT 0
+	)
+	is
+		v_file_names 	apex_application_global.vc_arr2;
+		v_message		VARCHAR2(4000);
+		v_SQLCode 		INTEGER;
+	begin
+		v_file_names := apex_util.string_to_table( p_File_Names );
+		for i in 1 .. v_file_names.count loop
+			Unzip_Parallel.Expand_Zip_Archive (
+				p_Init_Session_Code => p_Init_Session_Code,
+				p_Load_Zip_Query => p_Load_Zip_Query,
+				p_Search_Value => v_file_names(i),
+				p_Folder_query => p_Folder_query,
+				p_Filter_Path_Cond => p_Filter_Path_Cond,
+				p_Save_File_Code => p_Save_File_Code,
+				p_Parent_Folder => p_Parent_Folder,
+				p_Container_ID => p_Container_ID,
+				p_Context => p_Context,
+				p_Execute_Parallel	=> true,
+				p_SQLCode => v_SQLCode,
+				p_Message => v_Message
+			);
+		end loop;
+		/*
+		begin
+			if v_SQLCode = 0 then
+				v_message := 'OK';
+			end if;
+			htp.init();
+			htp.p(v_message);
+		exception when value_error then
+			dbms_output.put_line(v_message);
+		end;
+		*/
+	end Expand_Zip_Archive_Job;
+
 end unzip_parallel;
 /
+show errors
 

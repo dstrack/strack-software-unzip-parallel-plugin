@@ -61,12 +61,16 @@ $IF DBMS_DB_VERSION.VERSION >= 12 $THEN
 $ELSE
   subtype t_path_name is clob;
 $END
+  c_use_utl_file 	CONSTANT BOOLEAN := FALSE;
+
   type file_list is table of t_path_name;
   type date_list is table of date;
   type foffset_list is table of integer;
   g_size_limit integer := power(2, 32);
   g_size_limit_sqlcode integer := -20200;
   g_size_limit_message varchar2(200) := 'Maximum file size of 4GB exceeded';
+  g_access_utl_file_sqlcode integer := -20201;
+  g_access_utl_file_message varchar2(200) := 'Function is not enabled. Execute privilege on sys.utl_file to owner is required';
 --
   function file2blob
     ( p_dir varchar2
@@ -576,6 +580,7 @@ is
     end if;
   end;
 --
+$IF as_zip.c_use_utl_file $THEN
   procedure save_zip
     ( p_zipped_blob blob
     , p_dir varchar2 := 'MY_DIR'
@@ -592,6 +597,17 @@ is
     end loop;
     utl_file.fclose( t_fh );
   end;
+$ELSE
+  procedure save_zip
+    ( p_zipped_blob blob
+    , p_dir varchar2 := 'MY_DIR'
+    , p_filename varchar2 := 'my.zip'
+    )
+  is
+  begin
+	raise_application_error (g_access_utl_file_sqlcode, g_access_utl_file_message || ' in as_zip.save_zip');
+  end;
+$END
 --
   procedure get_file_date_list
     ( p_zipped_blob 	in blob
@@ -740,3 +756,4 @@ is
 --
 end;
 /
+show errors

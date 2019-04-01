@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Dirk Strack
+Copyright 2017-2019 Dirk Strack
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -29,8 +29,10 @@ SELECT REPLACE(MESSAGE, OPNAME ||': '|| TARGET_DESC, OPNAME) MESSAGE,
     TARGET_DESC
 FROM V$SESSION_LONGOPS
 WHERE USERNAME = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
+AND CONTEXT IN (NVL(MOD(NV('APP_SESSION'), POWER(2,31)), 0), 0)		-- context is of type BINARY_INTEGER
 AND OPNAME = 'Expand_Zip_Archive'
-AND LAST_UPDATE_TIME > SYSDATE - 1 / 24 / 4
+AND START_TIME >= SYSDATE - (1 / 24)
+AND SOFAR < TOTALWORK
 ORDER BY LAST_UPDATE_TIME DESC, PERCENT
 ;
 
@@ -104,6 +106,60 @@ begin
 		dbms_output.put_line(v_message);
 	end;
 end;
+/
+
+CREATE OR REPLACE PROCEDURE Expand_Files_Job (
+	p_File_Name			VARCHAR2,
+	p_Parent_Folder 	VARCHAR2 DEFAULT '/Home',
+	p_Execute_Parallel 	BOOLEAN DEFAULT true
+) -- this procedure is called on demand by an ajax request
+AUTHID DEFINER
+is
+	v_message			VARCHAR2(4000);
+	v_SQLCode 			INTEGER;
+	v_Init_Session_Code VARCHAR2(4000);
+	v_Load_Zip_File_Query VARCHAR2(4000);
+	v_Save_File_Code 	VARCHAR2(4000);
+begin
+	if apex_application.g_debug then
+        apex_debug.info('Expand_Files_Job : %s %s', p_File_Name, p_Parent_Folder);
+    end if;
+	v_Init_Session_Code :=
+			'apex_session.attach (' || 
+			'p_app_id=>' || V('APP_ID') || ', ' || 
+			'p_page_id=>' || V('APP_PAGE_ID') || ', ' || 
+			'p_session_id=>' || V('APP_SESSION') || 
+			');';
+	
+	v_Load_Zip_File_Query :=
+			'select BLOB_CONTENT, FILENAME' || chr(10) ||
+			'from APEX_APPLICATION_TEMP_FILES' || chr(10) ||
+			'where LOWER(MIME_TYPE) = ''application/zip'' ' || chr(10) ||
+			'and FILENAME = :search_value';
+	v_Save_File_Code := 'INSERT INTO DEMO_FILES (FILE_CONTENT, FILE_NAME, FILE_DATE, FILE_SIZE, MIME_TYPE, FOLDER_ID)' || chr(10) ||
+						'VALUES	(:unzipped_file, :file_name, :file_date, :file_size, :mime_type, :folder_id);';
+	Unzip_Parallel.Expand_Zip_Archive (
+			p_Init_Session_Code => v_Init_Session_Code,
+			p_Load_Zip_Query => v_Load_Zip_File_Query,
+			p_Search_Value => p_File_Name,
+			p_Folder_query => 'SELECT ID, PARENT_ID, FOLDER_NAME FROM DEMO_FOLDERS',
+			p_Filter_Path_Cond => 'instr(:path_name, ''__MACOSX/'') != 1',
+			p_Save_File_Code => v_Save_File_Code,
+			p_Parent_Folder => p_Parent_Folder,
+			p_Execute_Parallel	=> p_Execute_Parallel,
+			p_SQLCode => v_SQLCode,
+			p_Message => v_Message
+	);
+	begin
+		if v_SQLCode = 0 then
+			v_message := 'OK';
+		end if;
+		htp.init();
+		htp.p(v_message);
+	exception when value_error then
+		dbms_output.put_line(v_message);
+	end;
+end Expand_Files_Job;
 /
 
 

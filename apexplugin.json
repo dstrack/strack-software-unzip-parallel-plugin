@@ -1,6 +1,6 @@
 {
   "name": "Unzip Parallel Process Plug-in",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "Oracle Apex - Process plug-in for parallel unzip of zip archives",
   "keywords": ["import", "unzip data"],
   "homepage": "https://github.com/dstrack/strack-software-unzip-parallel-plugin",
@@ -21,7 +21,7 @@
   "oracle": {
     "versions": ["11.2.0.1", "12.1.0.1"],
     "apex": {
-      "versions": ["4.2.6", "5.1.0"],
+      "versions": ["18.1.0", "19.1.0"],
       "plugin": {
         "internalName": "COM.STRACK-SOFTWARE.UNZIP_PARALLEL",
         "type": "process",

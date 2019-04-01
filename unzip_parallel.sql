@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Dirk Strack
+Copyright 2017-2019 Dirk Strack
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -836,7 +836,7 @@ is
 			  context      => p_Context,
 			  sofar        => i - v_Start_ID + 1,
 			  totalwork    => v_End_ID - v_Start_ID + 1,
-			  target_desc  => SUBSTR(p_Search_Value, 1, 64),
+			  target_desc  => SUBSTR(p_Search_Value, 1, 32),
 			  units        => 'files'
 			);
 			v_Full_Path := v_file_list(i);

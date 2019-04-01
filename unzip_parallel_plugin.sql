@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Dirk Strack
+Copyright 2017-2019 Dirk Strack
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -68,6 +68,7 @@ begin
 			p_Filter_Path_Cond 	=> p_process.attribute_04,
 			p_Save_File_Code 	=> p_process.attribute_05,
 			p_Parent_Folder 	=> p_process.attribute_06,
+			p_Context			=> NVL(MOD(NV('APP_SESSION'), POWER(2,31)), 0),
 			p_Skip_Empty 		=> case when p_plugin.attribute_02 = 'Y' then true else false end,
 			p_Skip_Dot 			=> case when p_plugin.attribute_03 = 'Y' then true else false end,
 			p_Only_Files		=> case when p_plugin.attribute_04 = 'Y' then true else false end,

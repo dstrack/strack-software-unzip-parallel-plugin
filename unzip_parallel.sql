@@ -76,6 +76,11 @@ is
 		p_Archive_Name OUT NOCOPY VARCHAR2
 	);
 
+	PROCEDURE Delete_Zip_File_Query (
+		p_Delete_Zip_Query IN VARCHAR2,
+		p_Search_Value IN VARCHAR2
+	);
+
 	PROCEDURE Expand_Zip_Range (
 		p_Start_ID INTEGER DEFAULT NULL,
 		p_End_ID INTEGER DEFAULT NULL,
@@ -98,6 +103,7 @@ is
 		p_Init_Session_Code VARCHAR2 DEFAULT NULL,	-- PL/SQL code for initialization of session context.
 		p_Load_Zip_Code 	VARCHAR2 DEFAULT NULL,	-- PL/SQL code for loading the zipped blob and filename. The bind variable :search_value can be used to pass the p_Search_Value attribute.
 		p_Load_Zip_Query	VARCHAR2 DEFAULT NULL,	-- SQL Query for loading the zipped blob and filename. The bind variable :search_value or an page item name can be used to bind to the Page Item provided by the Search Item Attribute.
+		p_Delete_Zip_Query	VARCHAR2 DEFAULT NULL,	-- SQL Query for deleting the source of the zipped blob and filename. The bind variable :search_value or an page item name can be used to bind.
 		p_Search_Value		VARCHAR2 DEFAULT NULL,	-- Search value for the bind variable in the Load Zip Query code.
 		p_Folder_query 		VARCHAR2 DEFAULT NULL,	-- SQL Query for parameters to store the folders in a recursive tree table. When this field is empty, the :file_name will be prefixed with the path in the Save file code.
 		p_Create_Path_Code 	VARCHAR2 DEFAULT NULL,	-- PL/SQL code to save the path of the saved files.
@@ -118,6 +124,7 @@ is
 	PROCEDURE Expand_Zip_Archive_Job (
 		p_Init_Session_Code VARCHAR2 DEFAULT NULL,	-- PL/SQL code for initialization of session context.
 		p_Load_Zip_Query	VARCHAR2,	-- SQL Query for loading the zipped blob and filename. The bind variable :search_value or an page item name can be used to bind to the Page Item provided by the Search Item Attribute.
+		p_Delete_Zip_Query	VARCHAR2 DEFAULT NULL,	-- SQL Query for deleting the source of the zipped blob and filename. The bind variable :search_value or an page item name can be used to bind.
 		p_File_Names		VARCHAR2,	-- file names for the bind variable in the Load Zip Query code.
 		p_Folder_query 		VARCHAR2,	-- SQL Query for parameters to store the folders in a recursive tree table. When this field is empty, the :file_name will be prefixed with the path in the Save file code.
 		p_Filter_Path_Cond 	VARCHAR2 DEFAULT 'true',-- Condition to filter the folders that are extracted from the zip archive. The bind variable :path_name delivers path names like /root/sub1/sub2/ to the expression.
@@ -674,7 +681,28 @@ is
 	  when others then
 		dbms_sql.close_cursor(v_cur);
 		raise;
-	end;
+	end Load_zip_file_query;
+
+	PROCEDURE Delete_Zip_File_Query (
+		p_Delete_Zip_Query IN VARCHAR2,
+		p_Search_Value IN VARCHAR2
+	)
+	is
+		v_cur INTEGER;
+		v_rows INTEGER;
+	begin
+		v_cur := dbms_sql.open_cursor;
+		dbms_sql.parse(v_cur, p_Delete_Zip_Query, DBMS_SQL.NATIVE);
+		IF p_Search_Value IS NOT NULL then
+			dbms_sql.bind_variable(v_cur, ':search_value', p_Search_Value);
+		end if;
+		v_rows := dbms_sql.execute (v_cur);
+		dbms_sql.close_cursor(v_cur);
+	exception
+	  when others then
+		dbms_sql.close_cursor(v_cur);
+		raise;
+	end Delete_Zip_File_Query;
 
 	PROCEDURE Save_Unzipped_File (
 		p_Save_File_Code VARCHAR2,
@@ -975,6 +1003,7 @@ is
 		p_Init_Session_Code VARCHAR2 DEFAULT NULL,	-- PL/SQL code for initialization of session context.
 		p_Load_Zip_Code 	VARCHAR2 DEFAULT NULL,	-- PL/SQL code for loading the zipped blob and filename. The bind variable :search_value can be used to pass the p_Search_Value attribute.
 		p_Load_Zip_Query	VARCHAR2 DEFAULT NULL,	-- SQL Query for loading the zipped blob and filename. The bind variable :search_value or an page item name can be used to bind to the Page Item provided by the Search Item Attribute.
+		p_Delete_Zip_Query	VARCHAR2 DEFAULT NULL,	-- SQL Query for deleting the source of the zipped blob and filename. The bind variable :search_value or an page item name can be used to bind.
 		p_Search_Value		VARCHAR2 DEFAULT NULL,	-- Search value for the bind variable in the Load Zip Query code.
 		p_Folder_query 		VARCHAR2 DEFAULT NULL,	-- SQL Query for parameters to store the folders in a recursive tree table. When this field is empty, the :file_name will be prefixed with the path in the Save file code.
 		p_Create_Path_Code 	VARCHAR2 DEFAULT NULL,	-- PL/SQL code to save the path of the saved files.
@@ -1076,11 +1105,15 @@ is
 			commit; -- create files and folders finished
 			p_SQLCode := 0;
 		end if;
+		if p_Delete_Zip_Query IS NOT NULL then 
+			Unzip_Parallel.Delete_Zip_File_Query (p_Delete_Zip_Query, p_Search_Value);
+		end if;
 	end Expand_Zip_Archive;
 
 	PROCEDURE Expand_Zip_Archive_Job (
 		p_Init_Session_Code VARCHAR2 DEFAULT NULL,	-- PL/SQL code for initialization of session context.
 		p_Load_Zip_Query	VARCHAR2,	-- SQL Query for loading the zipped blob and filename. The bind variable :search_value or an page item name can be used to bind to the Page Item provided by the Search Item Attribute.
+		p_Delete_Zip_Query	VARCHAR2 DEFAULT NULL,	-- SQL Query for deleting the source of the zipped blob and filename. The bind variable :search_value or an page item name can be used to bind.
 		p_File_Names		VARCHAR2,	-- file names for the bind variable in the Load Zip Query code.
 		p_Folder_query 		VARCHAR2,	-- SQL Query for parameters to store the folders in a recursive tree table. When this field is empty, the :file_name will be prefixed with the path in the Save file code.
 		p_Filter_Path_Cond 	VARCHAR2 DEFAULT 'true',-- Condition to filter the folders that are extracted from the zip archive. The bind variable :path_name delivers path names like /root/sub1/sub2/ to the expression.
@@ -1099,6 +1132,7 @@ is
 			Unzip_Parallel.Expand_Zip_Archive (
 				p_Init_Session_Code => p_Init_Session_Code,
 				p_Load_Zip_Query => p_Load_Zip_Query,
+				p_Delete_Zip_Query => p_Delete_Zip_Query,
 				p_Search_Value => v_file_names(i),
 				p_Folder_query => p_Folder_query,
 				p_Filter_Path_Cond => p_Filter_Path_Cond,

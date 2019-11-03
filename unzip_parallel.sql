@@ -36,7 +36,7 @@ is
 	c_msg_file_bad_type CONSTANT VARCHAR2(500) := 'The file is not a zip archive.'; -- 'Datei ist kein Zip-Archiv.'
 	c_msg_file_empty 	CONSTANT VARCHAR2(500) := 'The zip archive does not contain any files.'; -- 'Das Zip-Archiv enthält keine Dateien.'
 	c_msg_process_fails	CONSTANT VARCHAR2(500) := 'The zip archive could not be processed.'; -- 'Das Zip-Archiv konnte nicht verarbeitet werden.'
-
+	c_debug 			CONSTANT BOOLEAN := FALSE;
 	c_rows_lower_limit CONSTANT INTEGER := 16;	-- lower limit of rows processed in one chunk.
 	c_size_lower_limit CONSTANT INTEGER := 5 * 1024 * 1024;	-- 5MB - lower limit for parallel processing
 	c_parallel_jobs    CONSTANT INTEGER := 4;	-- upper limit of parallel jobs.
@@ -255,9 +255,11 @@ is
 		v_cur := dbms_sql.open_cursor;
 		dbms_sql.parse(v_cur, p_Folder_query, DBMS_SQL.NATIVE);
 		dbms_sql.describe_columns2(v_cur, v_col_cnt, v_rec_tab);
-		/* for j in 1..v_col_cnt loop
-			-- dbms_output.put_line('col_name: ' || v_rec_tab(j).col_name || ', type: ' || v_rec_tab(j).col_type);
-		end loop; */
+$IF Unzip_Parallel.c_debug $THEN
+		for j in 1..v_col_cnt loop
+			dbms_output.put_line('col_name: ' || v_rec_tab(j).col_name || ', type: ' || v_rec_tab(j).col_type);
+		end loop; 
+$END
 		p_Folder_ID_Col := case when v_col_cnt >= 1 then v_rec_tab(1).col_name end;
 		p_Parent_ID_Col := case when v_col_cnt >= 2 then v_rec_tab(2).col_name end;
 		p_Folder_Name_Col := case when v_col_cnt >= 3 then v_rec_tab(3).col_name end;
@@ -287,7 +289,9 @@ is
 		v_folder_id INTEGER;
 		v_root_id	INTEGER;
 	begin
-		-- dbms_output.put_line('Create_Path : ' || p_Path_Name || ', Root_Id: ' || p_Root_Id);
+$IF Unzip_Parallel.c_debug $THEN
+		dbms_output.put_line('Create_Path : ' || p_Path_Name || ', Root_Id: ' || p_Root_Id || ', p_Container_ID: ' || p_Container_ID);
+$END
 		v_folder_id := p_Root_Id;
 		v_path := '/' || SUBSTR(p_Path_Name, 1, INSTR(p_Path_Name, '/', -1) - 1);
 		if v_path = '/' then
@@ -315,16 +319,22 @@ is
 			'CONNECT BY ' || dbms_assert.enquote_name(v_Parent_ID_Col) || ' = PRIOR ' || dbms_assert.enquote_name(v_Folder_ID_Col) ||
 		')' || chr(10) ||
 		'WHERE PATH = :path';
-		-- dbms_output.put_line('----------');
-		-- dbms_output.put_line(v_statment);
+$IF Unzip_Parallel.c_debug $THEN
+		dbms_output.put_line('----------');
+		dbms_output.put_line(v_statment);
+$END
 		execute immediate 'begin ' || v_statment || '; end;'
 			using out v_folder_id, p_Root_Id, v_path;
-		-- dbms_output.put_line('found path : ' || v_path || ', folder_id: ' || v_folder_id);
+$IF Unzip_Parallel.c_debug $THEN
+		dbms_output.put_line('found path : ' || v_path || ', folder_id: ' || v_folder_id);
+$END
 		return v_folder_id;
 	exception
 	  when NO_DATA_FOUND then
 	  	v_path := SUBSTR(v_path, 2) || '/';
-		-- dbms_output.put_line('new path : ' || v_path);
+$IF Unzip_Parallel.c_debug $THEN
+		dbms_output.put_line('new path : ' || v_path);
+$END
 		while INSTR(v_path, '/') > 0
 		loop
 			v_folder_name := SUBSTR(v_path, 1, INSTR(v_path, '/')-1);
@@ -337,9 +347,14 @@ is
 				'FROM (' || p_Folder_query || ') T ' || chr(10) ||
 				'WHERE (' || dbms_assert.enquote_name(v_Parent_ID_Col) || ' = :root_id' || chr(10) ||
 				   ' OR ' || dbms_assert.enquote_name(v_Parent_ID_Col) || ' IS NULL AND :root_id IS NULL )' || chr(10) ||
-				'AND ' || dbms_assert.enquote_name(v_Folder_Name_Col) || ' = :folder_name';
-				-- dbms_output.put_line('----------');
-				-- dbms_output.put_line(v_statment);
+				'AND ' || dbms_assert.enquote_name(v_Folder_Name_Col) || ' = :folder_name' || chr(10)
+				|| case when v_Container_ID_Col IS NOT NULL then 
+					'AND ' || dbms_assert.enquote_name(v_Container_ID_Col) || ' = ' || dbms_assert.enquote_literal(p_Container_ID)  
+				end;
+$IF Unzip_Parallel.c_debug $THEN
+				dbms_output.put_line('----------');
+				dbms_output.put_line(v_statment);
+$END
 				execute immediate 'begin ' || v_statment || '; end;'
 					using out v_folder_id, v_root_id, v_folder_name;
 			exception
@@ -353,8 +368,10 @@ is
 					')' || chr(10) ||
 					'VALUES (:folder_name, :parent_id, :container_id)' || chr(10) ||
 					'RETURNING ' || dbms_assert.enquote_name(v_Folder_ID_Col) || ' INTO :folder_id';
-					-- dbms_output.put_line('----------');
-					-- dbms_output.put_line(v_statment);
+$IF Unzip_Parallel.c_debug $THEN
+					dbms_output.put_line('----------');
+					dbms_output.put_line(v_statment);
+$END
 					execute immediate 'begin ' || v_statment || '; end;'
 						using v_folder_name, v_root_id, p_Container_ID, out v_folder_id;
 				else
@@ -365,14 +382,18 @@ is
 					')' || chr(10) ||
 					'VALUES (:folder_name, :parent_id)' || chr(10) ||
 					'RETURNING ' || dbms_assert.enquote_name(v_Folder_ID_Col) || ' INTO :folder_id';
-					-- dbms_output.put_line('----------');
-					-- dbms_output.put_line(v_statment);
+$IF Unzip_Parallel.c_debug $THEN
+					dbms_output.put_line('----------');
+					dbms_output.put_line(v_statment);
+$END
 					execute immediate 'begin ' || v_statment || '; end;'
 						using v_folder_name, v_root_id, out v_folder_id;
 				end if;
 			end;
 		end loop;
-		-- dbms_output.put_line('new folder_id: ' || v_folder_id);
+$IF Unzip_Parallel.c_debug $THEN
+		dbms_output.put_line('new folder_id: ' || v_folder_id);
+$END
 		return v_folder_id;
 	end;
 
@@ -599,10 +620,12 @@ is
 			v_parallel := CEIL(p_total_count / c_rows_lower_limit);
 		end if;
 		v_piece_size := p_total_count / v_parallel;
-		-- dbms_output.put_line('---------' );
-		-- dbms_output.put_line('total_count : ' || p_total_count);
-		-- dbms_output.put_line('parallel    : ' || v_parallel);
-		-- dbms_output.put_line('piece_size  : ' || v_piece_size);
+$IF Unzip_Parallel.c_debug $THEN
+		dbms_output.put_line('---------' );
+		dbms_output.put_line('total_count : ' || p_total_count);
+		dbms_output.put_line('parallel    : ' || v_parallel);
+		dbms_output.put_line('piece_size  : ' || v_piece_size);
+$END
 		v_chunk_sql :=
 			'WITH PA AS ( SELECT ' || p_total_count || ' CNT, ' || v_piece_size || ' LIMIT FROM DUAL) '
 			|| 'SELECT (LEVEL - 1) * LIMIT + 1 start_id, LEAST(LEVEL * LIMIT, PA.CNT)  end_id '
@@ -631,9 +654,11 @@ is
 			dbms_parallel_execute.resume_task(v_job_name);
 			v_status := dbms_parallel_execute.task_status(v_job_name);
 		end loop;
-		-- dbms_output.put_line('tries       : ' || v_try);
-		-- dbms_output.put_line('status      : ' || v_status);
+$IF Unzip_Parallel.c_debug $THEN
+		dbms_output.put_line('tries       : ' || v_try);
+		dbms_output.put_line('status      : ' || v_status);
 		-- Done with processing; drop the task
+$END
 		dbms_parallel_execute.drop_task(v_job_name);
 		if v_status = dbms_parallel_execute.finished then
 			p_SQLCode := 0;
@@ -662,9 +687,11 @@ is
 			dbms_sql.bind_variable(v_cur, ':search_value', p_Search_Value);
 		end if;
 		dbms_sql.describe_columns2(v_cur, v_col_cnt, v_rec_tab);
-		/* for j in 1..v_col_cnt loop
-			-- dbms_output.put_line('col_name : ' || v_rec_tab(j).col_name || ', type: ' || v_rec_tab(j).col_type);
-		end loop; */
+$IF Unzip_Parallel.c_debug $THEN
+		for j in 1..v_col_cnt loop
+			dbms_output.put_line('col_name : ' || v_rec_tab(j).col_name || ', type: ' || v_rec_tab(j).col_type);
+		end loop; 
+$END
 		dbms_sql.define_column(v_cur, 1, p_zip_file);
 		if v_col_cnt >= 2 then
 			dbms_sql.define_column(v_cur, 2, p_Archive_Name, 4000);
@@ -717,7 +744,9 @@ is
 		v_cur INTEGER;
 		v_rows INTEGER;
 	begin
-		-- dbms_output.put_line('Save_Unzipped_File: '||p_Folder_Id ||' ,' || p_File_Name || ', ' || p_File_Date);
+$IF Unzip_Parallel.c_debug $THEN
+		dbms_output.put_line('Save_Unzipped_File: '||p_Folder_Id ||' ,' || p_File_Name || ', ' || p_File_Date);
+$END
 		-- :folder_id, :unzipped_file, :file_name, :file_date, :file_size, :mime_type
 		v_cur := dbms_sql.open_cursor;
 		dbms_sql.parse(v_cur, 'begin ' || p_Save_File_Code || ' end;', DBMS_SQL.NATIVE);
@@ -849,7 +878,9 @@ is
 			execute immediate 'begin :folder_id := ' || p_Create_Path_Code || '; end;'
 				using out v_root_id, v_Parent_Folder, v_Folder_Id;
 			v_Folder_Id := v_root_id;
-			-- dbms_output.put_line('Parent_Folder B: ' || v_Parent_Folder || ', id : ' || v_root_id);
+$IF Unzip_Parallel.c_debug $THEN
+			dbms_output.put_line('Parent_Folder B: ' || v_Parent_Folder || ', id : ' || v_root_id);
+$END
 		end if;
 
 		as_zip.get_file_date_list ( v_zipped_blob, p_Encoding, v_file_list, v_date_list, v_offset_list);
@@ -882,14 +913,18 @@ is
 					v_File_Path := NVL(SUBSTR(v_Full_Path, 1, INSTR(v_Full_Path, '/', -1)), ' ');
 					v_File_Path := Prefix_File_Path(v_Archive_Name, v_File_Path);
 					v_File_Name := SUBSTR(v_Full_Path, INSTR(v_Full_Path, '/', -1) + 1);
-					-- dbms_output.put_line('Current Path ' || v_File_Path || ' - Full: ' || v_Full_Path );
+$IF Unzip_Parallel.c_debug $THEN
+					dbms_output.put_line('Current Path ' || v_File_Path || ' - Full: ' || v_Full_Path );
+$END
 					if v_File_Path != v_Last_Path
 					and (NOT p_Only_Files or v_File_Name IS NOT NULL) then
 						-- :folder_id := Unzip_Parallel.Create_Path (:path_name, :root_id);
 						execute immediate 'begin :folder_id := ' || p_Create_Path_Code || '; end;'
 							using out v_Folder_Id, v_File_Path, v_root_id;
-						-- dbms_output.put_line('----------');
-						-- dbms_output.put_line('Create_Path ' || v_Folder_Id || ' ' || v_File_Path );
+$IF Unzip_Parallel.c_debug $THEN
+						dbms_output.put_line('----------');
+						dbms_output.put_line('Create_Path ' || v_Folder_Id || ' ' || v_File_Path );
+$END
 						v_Last_Path := v_File_Path;
 					end if;
 				else -- when no path is stored, then the file name includes the file path
@@ -1082,8 +1117,10 @@ is
 				|| 'p_Encoding => q''{' || v_encoding || '}''' || chr(10)
 				|| ');' || chr(10)
 				|| 'end;';
-			-- dbms_output.put_line('----');
-			-- dbms_output.put_line(v_process_text);
+$IF Unzip_Parallel.c_debug $THEN
+			dbms_output.put_line('----');
+			dbms_output.put_line(v_process_text);
+$END
 			commit; -- create folders finished
 			Unzip_Parallel.Expand_Zip_Parallel (v_process_text, v_total_count, p_SQLCode, p_Message);
 		else
@@ -1145,6 +1182,10 @@ is
 				p_Message => v_Message
 			);
 		end loop;
+
+$IF Unzip_Parallel.c_debug $THEN
+		dbms_output.put_line('Expand_Zip_Archive_Job Result : ' || v_SQLCode || '  ' || v_Message );
+$END
 		/*
 		begin
 			if v_SQLCode = 0 then

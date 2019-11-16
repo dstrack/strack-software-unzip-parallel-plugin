@@ -1,3 +1,35 @@
+declare 
+    v_Schema_Name VARCHAR2(128) := SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA');
+	v_use_utl_file VARCHAR2(128);
+	v_stat VARCHAR2(32767);
+begin
+	SELECT case when COUNT(*) > 0 then 'TRUE' else 'FALSE' end INTO v_use_utl_file
+	FROM ALL_TAB_PRIVS 
+	WHERE TABLE_NAME = 'UTL_FILE' 
+	AND TABLE_SCHEMA = 'SYS' 
+	AND GRANTEE IN (v_Schema_Name, 'PUBLIC')
+	AND PRIVILEGE = 'EXECUTE';
+	/* generate the package as_zip_spec to enable conditional compilation */
+
+	v_stat := '
+	CREATE OR REPLACE PACKAGE as_zip_specs AUTHID DEFINER 
+	IS
+		c_use_utl_file 			CONSTANT BOOLEAN	:= ' || v_use_utl_file || ';
+	END as_zip_specs;
+	';
+	EXECUTE IMMEDIATE v_Stat;
+    dbms_output.put_line(v_Stat);
+	v_stat := '
+	CREATE OR REPLACE PACKAGE BODY as_zip_specs
+	IS
+    BEGIN -- package for specifications of the available libraries in the current installation schema
+        NULL;
+    END as_zip_specs;
+    ';
+	EXECUTE IMMEDIATE v_Stat;
+end;
+/
+
 CREATE OR REPLACE package as_zip
 AUTHID DEFINER
 is
@@ -56,13 +88,12 @@ THE SOFTWARE.
 
 ******************************************************************************
 ******************************************** */
+
 $IF DBMS_DB_VERSION.VERSION >= 12 $THEN
   subtype t_path_name is varchar2(32767);
 $ELSE
   subtype t_path_name is clob;
 $END
-  c_use_utl_file 	CONSTANT BOOLEAN := FALSE;
-
   type file_list is table of t_path_name;
   type date_list is table of date;
   type foffset_list is table of integer;
@@ -135,6 +166,8 @@ $END
     , p_offset integer
     )
   return blob;
+end;
+/
 --
 /*
 declare
@@ -189,8 +222,6 @@ begin
 end;
 
 */
-end;
-/
 
 CREATE OR REPLACE package body as_zip
 is
@@ -580,7 +611,7 @@ is
     end if;
   end;
 --
-$IF as_zip.c_use_utl_file $THEN
+$IF as_zip_specs.c_use_utl_file $THEN
   procedure save_zip
     ( p_zipped_blob blob
     , p_dir varchar2 := 'MY_DIR'

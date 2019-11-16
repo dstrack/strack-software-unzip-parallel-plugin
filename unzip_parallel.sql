@@ -120,7 +120,9 @@ is
 		p_SQLCode 			OUT INTEGER,
 		p_Message 			OUT NOCOPY VARCHAR2
 	);
-
+	PROCEDURE Default_Completion (p_SQLCode NUMBER, p_Message VARCHAR2, p_Filename VARCHAR2);
+	PROCEDURE PLSQL_Completion (p_SQLCode NUMBER, p_Message VARCHAR2, p_Filename VARCHAR2);
+	PROCEDURE AJAX_Completion (p_SQLCode NUMBER, p_Message VARCHAR2, p_Filename VARCHAR2);
 	PROCEDURE Expand_Zip_Archive_Job (
 		p_Init_Session_Code VARCHAR2 DEFAULT NULL,	-- PL/SQL code for initialization of session context.
 		p_Load_Zip_Query	VARCHAR2,	-- SQL Query for loading the zipped blob and filename. The bind variable :search_value or an page item name can be used to bind to the Page Item provided by the Search Item Attribute.
@@ -131,7 +133,11 @@ is
 		p_Save_File_Code 	VARCHAR2,				-- PL/SQL code to save an unzipped file from the zip archive. The bind variables :unzipped_file, :file_name, :file_date, :file_size, :mime_type, :folder_id deliver values to be saved.
 		p_Parent_Folder 	VARCHAR2 DEFAULT NULL,	-- Pathname of the Directory where the unzipped files are saved.
 		p_Container_ID		NUMBER  DEFAULT NULL,   -- folder table foreign key reference value to container table
-		p_Context  			BINARY_INTEGER DEFAULT 0
+		p_Context  			BINARY_INTEGER DEFAULT 0,
+		p_Completion_Procedure VARCHAR2 DEFAULT 'unzip_parallel.Default_Completion' -- Name of a procedure with a call profile like: unzip_Completion(p_SQLCode NUMBER, p_Message VARCHAR2)
+		-- when the procedure is called from a Apex PL/SQL process, unzip_parallel.use PLSQL_Completion to display bad results.
+		-- when it is called from a AJAX process, use 'unzip_parallel.AJAX_Completion'  to display results.
+		-- when it is called from a scheduler job, write the result in a logging table.
 	);
 	
 end Unzip_Parallel;
@@ -1145,7 +1151,46 @@ $END
 		if p_Delete_Zip_Query IS NOT NULL then 
 			Unzip_Parallel.Delete_Zip_File_Query (p_Delete_Zip_Query, p_Search_Value);
 		end if;
+	exception
+	  when others then
+	  	p_SQLCode := SQLCODE;
+	  	p_Message := SQLERRM;
+		if p_Delete_Zip_Query IS NOT NULL then 
+			Unzip_Parallel.Delete_Zip_File_Query (p_Delete_Zip_Query, p_Search_Value);
+		end if;	  	
 	end Expand_Zip_Archive;
+
+	PROCEDURE Default_Completion (p_SQLCode NUMBER, p_Message VARCHAR2, p_Filename VARCHAR2)
+	is
+	begin
+		dbms_output.put_line('Expand_Zip_Archive_Job for file ' || p_Filename || ', Result : ' || p_SQLCode || '  ' || p_Message );
+	end;
+
+	PROCEDURE PLSQL_Completion (p_SQLCode NUMBER, p_Message VARCHAR2, p_Filename VARCHAR2)
+	is
+		v_message		VARCHAR2(4000);
+	begin
+		if p_Message IS NOT NULL then
+			v_message := APEX_LANG.LANG (
+				p_primary_text_string => p_Message,
+				p_primary_language => 'en'
+			);
+			raise_application_error (Unzip_Parallel.c_App_Error_Code, v_message);
+		end if;
+	end;
+
+	PROCEDURE AJAX_Completion (p_SQLCode NUMBER, p_Message VARCHAR2, p_Filename VARCHAR2)
+	is
+	begin
+		htp.init();
+		if p_SQLCode = 0 then
+			htp.p('OK');
+		else
+			htp.p(p_Message);
+		end if;
+	exception when value_error then
+		dbms_output.put_line(p_Message);
+	end;
 
 	PROCEDURE Expand_Zip_Archive_Job (
 		p_Init_Session_Code VARCHAR2 DEFAULT NULL,	-- PL/SQL code for initialization of session context.
@@ -1157,7 +1202,8 @@ $END
 		p_Save_File_Code 	VARCHAR2,				-- PL/SQL code to save an unzipped file from the zip archive. The bind variables :unzipped_file, :file_name, :file_date, :file_size, :mime_type, :folder_id deliver values to be saved.
 		p_Parent_Folder 	VARCHAR2 DEFAULT NULL,	-- Pathname of the Directory where the unzipped files are saved.
 		p_Container_ID		NUMBER  DEFAULT NULL,   -- folder table foreign key reference value to container table
-		p_Context  			BINARY_INTEGER DEFAULT 0
+		p_Context  			BINARY_INTEGER DEFAULT 0,
+		p_Completion_Procedure VARCHAR2 DEFAULT 'unzip_parallel.Default_Completion' -- Name of a procedure with a call profile like: unzip_Completion(p_SQLCode NUMBER, p_Message VARCHAR2)
 	)
 	is
 		v_file_names 	apex_application_global.vc_arr2;
@@ -1181,22 +1227,11 @@ $END
 				p_SQLCode => v_SQLCode,
 				p_Message => v_Message
 			);
-		end loop;
-
-$IF Unzip_Parallel.c_debug $THEN
-		dbms_output.put_line('Expand_Zip_Archive_Job Result : ' || v_SQLCode || '  ' || v_Message );
-$END
-		/*
-		begin
-			if v_SQLCode = 0 then
-				v_message := 'OK';
+			if p_Completion_Procedure IS NOT NULL then 
+				execute immediate 'begin ' || p_Completion_Procedure || '(:a, :b, :c); end;'
+				using in v_SQLCode, v_Message, v_file_names(i);
 			end if;
-			htp.init();
-			htp.p(v_message);
-		exception when value_error then
-			dbms_output.put_line(v_message);
-		end;
-		*/
+		end loop;
 	end Expand_Zip_Archive_Job;
 
 end unzip_parallel;

@@ -29,6 +29,7 @@ is
 	v_exec_result apex_plugin.t_process_exec_result;
 	v_Load_Zip_Query 	VARCHAR2(4000);
 	v_Search_Value		VARCHAR2(4000);
+	v_Init_Session_Code VARCHAR2(4000);
 	v_Execute_Parallel	BOOLEAN;
 	v_message			VARCHAR2(2000);
 	v_SQLCode 			INTEGER;
@@ -59,9 +60,15 @@ begin
 	or instr(upper(v_Load_Zip_Query), 'WWV_FLOW_FILES') > 0 then
 		v_Execute_Parallel := false;	-- this views are not accessable by background jobs
 	end if;
+	v_Init_Session_Code :=
+			'apex_session.attach (' || 
+			'p_app_id=>' || V('APP_ID') || ', ' || 
+			'p_page_id=>' || V('APP_PAGE_ID') || ', ' || 
+			'p_session_id=>' || V('APP_SESSION') || 
+			');' || chr(10) || p_plugin.attribute_01 ;
 
 	Unzip_Parallel.Expand_Zip_Archive (
-			p_Init_Session_Code => p_plugin.attribute_01,
+			p_Init_Session_Code => v_Init_Session_Code,
 			p_Load_Zip_Query 	=> v_Load_Zip_Query,
 			p_Search_Value 		=> v_Search_Value,
 			p_Folder_query 		=> p_process.attribute_03,

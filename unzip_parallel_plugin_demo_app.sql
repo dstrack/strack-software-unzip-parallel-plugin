@@ -6,16 +6,16 @@ whenever sqlerror exit sql.sqlcode rollback
 -- ORACLE Application Express (APEX) export file
 --
 -- You should run the script connected to SQL*Plus as the Oracle user
--- APEX_180200 or as the owner (parsing schema) of the application.
+-- APEX_190100 or as the owner (parsing schema) of the application.
 --
 -- NOTE: Calls to apex_application_install override the defaults below.
 --
 --------------------------------------------------------------------------------
 begin
 wwv_flow_api.import_begin (
- p_version_yyyy_mm_dd=>'2018.05.24'
-,p_release=>'18.2.0.00.12'
-,p_default_workspace_id=>1622491426059007
+ p_version_yyyy_mm_dd=>'2019.03.31'
+,p_release=>'19.1.0.00.15'
+,p_default_workspace_id=>1304835857079617
 ,p_default_application_id=>118060
 ,p_default_owner=>'STRACK_DEV'
 );
@@ -27,12 +27,12 @@ prompt APPLICATION 118060 - Unzip Parallel Plugin Demo
 -- Application Export:
 --   Application:     118060
 --   Name:            Unzip Parallel Plugin Demo
---   Date and Time:   00:47 Tuesday April 2, 2019
+--   Date and Time:   01:14 Tuesday December 31, 2019
 --   Exported By:     DIRK
 --   Flashback:       0
 --   Export Type:     Application Export
---   Version:         18.2.0.00.12
---   Instance ID:     270101937255479
+--   Version:         19.1.0.00.15
+--   Instance ID:     250161874321153
 --
 
 -- Application Statistics:
@@ -80,7 +80,6 @@ prompt --application/create_application
 begin
 wwv_flow_api.create_flow(
  p_id=>wwv_flow.g_flow_id
-,p_display_id=>nvl(wwv_flow_application_install.get_application_id,118060)
 ,p_owner=>nvl(wwv_flow_application_install.get_schema,'STRACK_DEV')
 ,p_name=>nvl(wwv_flow_application_install.get_application_name,'Unzip Parallel Plugin Demo')
 ,p_alias=>nvl(wwv_flow_application_install.get_application_alias,'UNZIP_PARALLEL_PLUGIN_DEMO118060')
@@ -111,7 +110,7 @@ wwv_flow_api.create_flow(
 ,p_csv_encoding=>'Y'
 ,p_auto_time_zone=>'N'
 ,p_last_updated_by=>'DIRK'
-,p_last_upd_yyyymmddhh24miss=>'20190402002135'
+,p_last_upd_yyyymmddhh24miss=>'20191230030236'
 ,p_file_prefix => nvl(wwv_flow_application_install.get_static_app_file_prefix,'')
 ,p_ui_type_name => null
 );
@@ -8053,8 +8052,6 @@ wwv_flow_api.create_page(
 ,p_step_title=>'Upload Zip Archives'
 ,p_reload_on_submit=>'A'
 ,p_warn_on_unsaved_changes=>'N'
-,p_step_sub_title=>'Home'
-,p_step_sub_title_type=>'TEXT_WITH_SUBSTITUTIONS'
 ,p_autocomplete_on_off=>'ON'
 ,p_page_template_options=>'#DEFAULT#'
 ,p_required_role=>'MUST_NOT_BE_PUBLIC_USER'
@@ -8283,6 +8280,7 @@ wwv_flow_api.create_page_button(
 ,p_button_position=>'REGION_TEMPLATE_COPY'
 ,p_button_execute_validations=>'N'
 ,p_icon_css_classes=>'fa-close'
+,p_grid_new_grid=>false
 );
 wwv_flow_api.create_page_button(
  p_id=>wwv_flow_api.id(79588064400596910)
@@ -8317,6 +8315,7 @@ wwv_flow_api.create_page_button(
 ,p_button_is_hot=>'Y'
 ,p_button_image_alt=>'Upload File'
 ,p_button_position=>'REGION_TEMPLATE_CREATE'
+,p_grid_new_grid=>false
 );
 wwv_flow_api.create_page_button(
  p_id=>wwv_flow_api.id(79581862737491029)
@@ -8344,6 +8343,7 @@ wwv_flow_api.create_page_button(
 ,p_button_execute_validations=>'N'
 ,p_warn_on_unsaved_changes=>null
 ,p_icon_css_classes=>'fa-refresh'
+,p_grid_new_grid=>false
 );
 wwv_flow_api.create_page_branch(
  p_id=>wwv_flow_api.id(81129765610398934)
@@ -8607,6 +8607,7 @@ wwv_flow_api.create_page_da_action(
 ');',
 '',
 'start_progress_update(1);'))
+,p_stop_execution_on_error=>'Y'
 );
 wwv_flow_api.create_page_da_action(
  p_id=>wwv_flow_api.id(81119454346307610)
@@ -8765,7 +8766,6 @@ wwv_flow_api.create_page(
 ,p_step_title=>'Unzip Parallel Plugin Demo - Log In'
 ,p_reload_on_submit=>'A'
 ,p_warn_on_unsaved_changes=>'N'
-,p_step_sub_title_type=>'TEXT_WITH_SUBSTITUTIONS'
 ,p_first_item=>'AUTO_FIRST_ITEM'
 ,p_autocomplete_on_off=>'OFF'
 ,p_step_template=>wwv_flow_api.id(79500812892447791)
@@ -8907,6 +8907,38 @@ wwv_flow_api.create_install_script(
 ,p_sequence=>20
 ,p_script_type=>'INSTALL'
 ,p_script_clob=>wwv_flow_string.join(wwv_flow_t_varchar2(
+'declare ',
+'    v_Schema_Name VARCHAR2(128) := SYS_CONTEXT(''USERENV'', ''CURRENT_SCHEMA'');',
+'	v_use_utl_file VARCHAR2(128);',
+'	v_stat VARCHAR2(32767);',
+'begin',
+'	SELECT case when COUNT(*) > 0 then ''TRUE'' else ''FALSE'' end INTO v_use_utl_file',
+'	FROM ALL_TAB_PRIVS ',
+'	WHERE TABLE_NAME = ''UTL_FILE'' ',
+'	AND TABLE_SCHEMA = ''SYS'' ',
+'	AND GRANTEE IN (v_Schema_Name, ''PUBLIC'')',
+'	AND PRIVILEGE = ''EXECUTE'';',
+'	/* generate the package as_zip_spec to enable conditional compilation */',
+'',
+'	v_stat := ''',
+'	CREATE OR REPLACE PACKAGE as_zip_specs AUTHID DEFINER ',
+'	IS',
+'		c_use_utl_file 			CONSTANT BOOLEAN	:= '' || v_use_utl_file || '';',
+'	END as_zip_specs;',
+'	'';',
+'	EXECUTE IMMEDIATE v_Stat;',
+'    dbms_output.put_line(v_Stat);',
+'	v_stat := ''',
+'	CREATE OR REPLACE PACKAGE BODY as_zip_specs',
+'	IS',
+'    BEGIN -- package for specifications of the available libraries in the current installation schema',
+'        NULL;',
+'    END as_zip_specs;',
+'    '';',
+'	EXECUTE IMMEDIATE v_Stat;',
+'end;',
+'/',
+'',
 'CREATE OR REPLACE package as_zip',
 'AUTHID DEFINER',
 'is',
@@ -8965,6 +8997,7 @@ wwv_flow_api.create_install_script(
 '',
 '******************************************************************************',
 '******************************************** */',
+'',
 '$IF DBMS_DB_VERSION.VERSION >= 12 $THEN',
 '  subtype t_path_name is varchar2(32767);',
 '$ELSE',
@@ -8976,6 +9009,8 @@ wwv_flow_api.create_install_script(
 '  g_size_limit integer := power(2, 32);',
 '  g_size_limit_sqlcode integer := -20200;',
 '  g_size_limit_message varchar2(200) := ''Maximum file size of 4GB exceeded'';',
+'  g_access_utl_file_sqlcode integer := -20201;',
+'  g_access_utl_file_message varchar2(200) := ''Function is not enabled. Execute privilege on sys.utl_file to owner is required'';',
 '--',
 '  function file2blob',
 '    ( p_dir varchar2',
@@ -9040,6 +9075,8 @@ wwv_flow_api.create_install_script(
 '    , p_offset integer',
 '    )',
 '  return blob;',
+'end;',
+'/',
 '--',
 '/*',
 'declare',
@@ -9094,8 +9131,6 @@ wwv_flow_api.create_install_script(
 'end;',
 '',
 '*/',
-'end;',
-'/',
 '',
 'CREATE OR REPLACE package body as_zip',
 'is',
@@ -9485,6 +9520,7 @@ wwv_flow_api.create_install_script(
 '    end if;',
 '  end;',
 '--',
+'$IF as_zip_specs.c_use_utl_file $THEN',
 '  procedure save_zip',
 '    ( p_zipped_blob blob',
 '    , p_dir varchar2 := ''MY_DIR''',
@@ -9501,6 +9537,17 @@ wwv_flow_api.create_install_script(
 '    end loop;',
 '    utl_file.fclose( t_fh );',
 '  end;',
+'$ELSE',
+'  procedure save_zip',
+'    ( p_zipped_blob blob',
+'    , p_dir varchar2 := ''MY_DIR''',
+'    , p_filename varchar2 := ''my.zip''',
+'    )',
+'  is',
+'  begin',
+'	raise_application_error (g_access_utl_file_sqlcode, g_access_utl_file_message || '' in as_zip.save_zip'');',
+'  end;',
+'$END',
 '--',
 '  procedure get_file_date_list',
 '    ( p_zipped_blob 	in blob',
@@ -9629,7 +9676,15 @@ wwv_flow_api.create_install_script(
 '	  return utl_compress.lz_uncompress( t_tmp );',
 '	end if;',
 '--',
-'	if dbms_lob.substr( p_zipped_blob, 2, t_hd_ind + 10 ) = hextoraw( ''0000'' ) -- The file is stored (no compression)',
+'	if dbms_lob.substr( p_zipped_blob, 2, t_hd_ind + 10 ) = hextoraw( ''0000'' ) -- The file is st'))
+);
+end;
+/
+begin
+wwv_flow_api.append_to_install_script(
+ p_id=>wwv_flow_api.id(81192353833149321)
+,p_script_clob=>wwv_flow_string.join(wwv_flow_t_varchar2(
+'ored (no compression)',
 '	then',
 '	  t_fl_ind := blob2num( p_zipped_blob, 4, t_hd_ind + 42 );',
 '	  dbms_lob.createtemporary( t_tmp, true );',
@@ -9649,8 +9704,10 @@ wwv_flow_api.create_install_script(
 '--',
 'end;',
 '/',
+'show errors',
 ''))
 );
+null;
 end;
 /
 prompt --application/deployment/install/install_unzip_parallel
@@ -9700,7 +9757,7 @@ wwv_flow_api.create_install_script(
 '	c_msg_file_bad_type CONSTANT VARCHAR2(500) := ''The file is not a zip archive.''; -- ''Datei ist kein Zip-Archiv.''',
 unistr('	c_msg_file_empty 	CONSTANT VARCHAR2(500) := ''The zip archive does not contain any files.''; -- ''Das Zip-Archiv enth\00E4lt keine Dateien.'''),
 '	c_msg_process_fails	CONSTANT VARCHAR2(500) := ''The zip archive could not be processed.''; -- ''Das Zip-Archiv konnte nicht verarbeitet werden.''',
-'',
+'	c_debug 			CONSTANT BOOLEAN := FALSE;',
 '	c_rows_lower_limit CONSTANT INTEGER := 16;	-- lower limit of rows processed in one chunk.',
 '	c_size_lower_limit CONSTANT INTEGER := 5 * 1024 * 1024;	-- 5MB - lower limit for parallel processing',
 '	c_parallel_jobs    CONSTANT INTEGER := 4;	-- upper limit of parallel jobs.',
@@ -9740,6 +9797,11 @@ unistr('	c_msg_file_empty 	CONSTANT VARCHAR2(500) := ''The zip archive does not 
 '		p_Archive_Name OUT NOCOPY VARCHAR2',
 '	);',
 '',
+'	PROCEDURE Delete_Zip_File_Query (',
+'		p_Delete_Zip_Query IN VARCHAR2,',
+'		p_Search_Value IN VARCHAR2',
+'	);',
+'',
 '	PROCEDURE Expand_Zip_Range (',
 '		p_Start_ID INTEGER DEFAULT NULL,',
 '		p_End_ID INTEGER DEFAULT NULL,',
@@ -9762,6 +9824,7 @@ unistr('	c_msg_file_empty 	CONSTANT VARCHAR2(500) := ''The zip archive does not 
 '		p_Init_Session_Code VARCHAR2 DEFAULT NULL,	-- PL/SQL code for initialization of session context.',
 '		p_Load_Zip_Code 	VARCHAR2 DEFAULT NULL,	-- PL/SQL code for loading the zipped blob and filename. The bind variable :search_value can be used to pass the p_Search_Value attribute.',
 '		p_Load_Zip_Query	VARCHAR2 DEFAULT NULL,	-- SQL Query for loading the zipped blob and filename. The bind variable :search_value or an page item name can be used to bind to the Page Item provided by the Search Item Attribute.',
+'		p_Delete_Zip_Query	VARCHAR2 DEFAULT NULL,	-- SQL Query for deleting the source of the zipped blob and filename. The bind variable :search_value or an page item name can be used to bind.',
 '		p_Search_Value		VARCHAR2 DEFAULT NULL,	-- Search value for the bind variable in the Load Zip Query code.',
 '		p_Folder_query 		VARCHAR2 DEFAULT NULL,	-- SQL Query for parameters to store the folders in a recursive tree table. When this field is empty, the :file_name will be prefixed with the path in the Save file code.',
 '		p_Create_Path_Code 	VARCHAR2 DEFAULT NULL,	-- PL/SQL code to save the path of the saved files.',
@@ -9778,17 +9841,24 @@ unistr('	c_msg_file_empty 	CONSTANT VARCHAR2(500) := ''The zip archive does not 
 '		p_SQLCode 			OUT INTEGER,',
 '		p_Message 			OUT NOCOPY VARCHAR2',
 '	);',
-'',
+'	PROCEDURE Default_Completion (p_SQLCode NUMBER, p_Message VARCHAR2, p_Filename VARCHAR2);',
+'	PROCEDURE PLSQL_Completion (p_SQLCode NUMBER, p_Message VARCHAR2, p_Filename VARCHAR2);',
+'	PROCEDURE AJAX_Completion (p_SQLCode NUMBER, p_Message VARCHAR2, p_Filename VARCHAR2);',
 '	PROCEDURE Expand_Zip_Archive_Job (',
 '		p_Init_Session_Code VARCHAR2 DEFAULT NULL,	-- PL/SQL code for initialization of session context.',
 '		p_Load_Zip_Query	VARCHAR2,	-- SQL Query for loading the zipped blob and filename. The bind variable :search_value or an page item name can be used to bind to the Page Item provided by the Search Item Attribute.',
+'		p_Delete_Zip_Query	VARCHAR2 DEFAULT NULL,	-- SQL Query for deleting the source of the zipped blob and filename. The bind variable :search_value or an page item name can be used to bind.',
 '		p_File_Names		VARCHAR2,	-- file names for the bind variable in the Load Zip Query code.',
 '		p_Folder_query 		VARCHAR2,	-- SQL Query for parameters to store the folders in a recursive tree table. When this field is empty, the :file_name will be prefixed with the path in the Save file code.',
 '		p_Filter_Path_Cond 	VARCHAR2 DEFAULT ''true'',-- Condition to filter the folders that are extracted from the zip archive. The bind variable :path_name delivers path names like /root/sub1/sub2/ to the expression.',
 '		p_Save_File_Code 	VARCHAR2,				-- PL/SQL code to save an unzipped file from the zip archive. The bind variables :unzipped_file, :file_name, :file_date, :file_size, :mime_type, :folder_id deliver values to be saved.',
 '		p_Parent_Folder 	VARCHAR2 DEFAULT NULL,	-- Pathname of the Directory where the unzipped files are saved.',
 '		p_Container_ID		NUMBER  DEFAULT NULL,   -- folder table foreign key reference value to container table',
-'		p_Context  			BINARY_INTEGER DEFAULT 0',
+'		p_Context  			BINARY_INTEGER DEFAULT 0,',
+'		p_Completion_Procedure VARCHAR2 DEFAULT ''unzip_parallel.Default_Completion'' -- Name of a procedure with a call profile like: unzip_Completion(p_SQLCode NUMBER, p_Message VARCHAR2)',
+'		-- when the procedure is called from a Apex PL/SQL process, unzip_parallel.use PLSQL_Completion to display bad results.',
+'		-- when it is called from a AJAX process, use ''unzip_parallel.AJAX_Completion''  to display results.',
+'		-- when it is called from a scheduler job, write the result in a logging table.',
 '	);',
 '	',
 'end Unzip_Parallel;',
@@ -9912,9 +9982,11 @@ unistr('	c_msg_file_empty 	CONSTANT VARCHAR2(500) := ''The zip archive does not 
 '		v_cur := dbms_sql.open_cursor;',
 '		dbms_sql.parse(v_cur, p_Folder_query, DBMS_SQL.NATIVE);',
 '		dbms_sql.describe_columns2(v_cur, v_col_cnt, v_rec_tab);',
-'		/* for j in 1..v_col_cnt loop',
-'			-- dbms_output.put_line(''col_name: '' || v_rec_tab(j).col_name || '', type: '' || v_rec_tab(j).col_type);',
-'		end loop; */',
+'$IF Unzip_Parallel.c_debug $THEN',
+'		for j in 1..v_col_cnt loop',
+'			dbms_output.put_line(''col_name: '' || v_rec_tab(j).col_name || '', type: '' || v_rec_tab(j).col_type);',
+'		end loop; ',
+'$END',
 '		p_Folder_ID_Col := case when v_col_cnt >= 1 then v_rec_tab(1).col_name end;',
 '		p_Parent_ID_Col := case when v_col_cnt >= 2 then v_rec_tab(2).col_name end;',
 '		p_Folder_Name_Col := case when v_col_cnt >= 3 then v_rec_tab(3).col_name end;',
@@ -9944,7 +10016,9 @@ unistr('	c_msg_file_empty 	CONSTANT VARCHAR2(500) := ''The zip archive does not 
 '		v_folder_id INTEGER;',
 '		v_root_id	INTEGER;',
 '	begin',
-'		-- dbms_output.put_line(''Create_Path : '' || p_Path_Name || '', Root_Id: '' || p_Root_Id);',
+'$IF Unzip_Parallel.c_debug $THEN',
+'		dbms_output.put_line(''Create_Path : '' || p_Path_Name || '', Root_Id: '' || p_Root_Id || '', p_Container_ID: '' || p_Container_ID);',
+'$END',
 '		v_folder_id := p_Root_Id;',
 '		v_path := ''/'' || SUBSTR(p_Path_Name, 1, INSTR(p_Path_Name, ''/'', -1) - 1);',
 '		if v_path = ''/'' then',
@@ -9972,16 +10046,22 @@ unistr('	c_msg_file_empty 	CONSTANT VARCHAR2(500) := ''The zip archive does not 
 '			''CONNECT BY '' || dbms_assert.enquote_name(v_Parent_ID_Col) || '' = PRIOR '' || dbms_assert.enquote_name(v_Folder_ID_Col) ||',
 '		'')'' || chr(10) ||',
 '		''WHERE PATH = :path'';',
-'		-- dbms_output.put_line(''----------'');',
-'		-- dbms_output.put_line(v_statment);',
+'$IF Unzip_Parallel.c_debug $THEN',
+'		dbms_output.put_line(''----------'');',
+'		dbms_output.put_line(v_statment);',
+'$END',
 '		execute immediate ''begin '' || v_statment || ''; end;''',
 '			using out v_folder_id, p_Root_Id, v_path;',
-'		-- dbms_output.put_line(''found path : '' || v_path || '', folder_id: '' || v_folder_id);',
+'$IF Unzip_Parallel.c_debug $THEN',
+'		dbms_output.put_line(''found path : '' || v_path || '', folder_id: '' || v_folder_id);',
+'$END',
 '		return v_folder_id;',
 '	exception',
 '	  when NO_DATA_FOUND then',
 '	  	v_path := SUBSTR(v_path, 2) || ''/'';',
-'		-- dbms_output.put_line(''new path : '' || v_path);',
+'$IF Unzip_Parallel.c_debug $THEN',
+'		dbms_output.put_line(''new path : '' || v_path);',
+'$END',
 '		while INSTR(v_path, ''/'') > 0',
 '		loop',
 '			v_folder_name := SUBSTR(v_path, 1, INSTR(v_path, ''/'')-1);',
@@ -9994,9 +10074,14 @@ unistr('	c_msg_file_empty 	CONSTANT VARCHAR2(500) := ''The zip archive does not 
 '				''FROM ('' || p_Folder_query || '') T '' || chr(10) ||',
 '				''WHERE ('' || dbms_assert.enquote_name(v_Parent_ID_Col) || '' = :root_id'' || chr(10) ||',
 '				   '' OR '' || dbms_assert.enquote_name(v_Parent_ID_Col) || '' IS NULL AND :root_id IS NULL )'' || chr(10) ||',
-'				''AND '' || dbms_assert.enquote_name(v_Folder_Name_Col) || '' = :folder_name'';',
-'				-- dbms_output.put_line(''----------'');',
-'				-- dbms_output.put_line(v_statment);',
+'				''AND '' || dbms_assert.enquote_name(v_Folder_Name_Col) || '' = :folder_name'' || chr(10)',
+'				|| case when v_Container_ID_Col IS NOT NULL then ',
+'					''AND '' || dbms_assert.enquote_name(v_Container_ID_Col) || '' = '' || dbms_assert.enquote_literal(p_Container_ID)  ',
+'				end;',
+'$IF Unzip_Parallel.c_debug $THEN',
+'				dbms_output.put_line(''----------'');',
+'				dbms_output.put_line(v_statment);',
+'$END',
 '				execute immediate ''begin '' || v_statment || ''; end;''',
 '					using out v_folder_id, v_root_id, v_folder_name;',
 '			exception',
@@ -10010,8 +10095,10 @@ unistr('	c_msg_file_empty 	CONSTANT VARCHAR2(500) := ''The zip archive does not 
 '					'')'' || chr(10) ||',
 '					''VALUES (:folder_name, :parent_id, :container_id)'' || chr(10) ||',
 '					''RETURNING '' || dbms_assert.enquote_name(v_Folder_ID_Col) || '' INTO :folder_id'';',
-'					-- dbms_output.put_line(''----------'');',
-'					-- dbms_output.put_line(v_statment);',
+'$IF Unzip_Parallel.c_debug $THEN',
+'					dbms_output.put_line(''----------'');',
+'					dbms_output.put_line(v_statment);',
+'$END',
 '					execute immediate ''begin '' || v_statment || ''; end;''',
 '						using v_folder_name, v_root_id, p_Container_ID, out v_folder_id;',
 '				else',
@@ -10022,14 +10109,18 @@ unistr('	c_msg_file_empty 	CONSTANT VARCHAR2(500) := ''The zip archive does not 
 '					'')'' || chr(10) ||',
 '					''VALUES (:folder_name, :parent_id)'' || chr(10) ||',
 '					''RETURNING '' || dbms_assert.enquote_name(v_Folder_ID_Col) || '' INTO :folder_id'';',
-'					-- dbms_output.put_line(''----------'');',
-'					-- dbms_output.put_line(v_statment);',
+'$IF Unzip_Parallel.c_debug $THEN',
+'					dbms_output.put_line(''----------'');',
+'					dbms_output.put_line(v_statment);',
+'$END',
 '					execute immediate ''begin '' || v_statment || ''; end;''',
 '						using v_folder_name, v_root_id, out v_folder_id;',
 '				end if;',
 '			end;',
 '		end loop;',
-'		-- dbms_output.put_line(''new folder_id: '' || v_folder_id);',
+'$IF Unzip_Parallel.c_debug $THEN',
+'		dbms_output.put_line(''new folder_id: '' || v_folder_id);',
+'$END',
 '		return v_folder_id;',
 '	end;',
 '',
@@ -10256,10 +10347,12 @@ unistr('	c_msg_file_empty 	CONSTANT VARCHAR2(500) := ''The zip archive does not 
 '			v_parallel := CEIL(p_total_count / c_rows_lower_limit);',
 '		end if;',
 '		v_piece_size := p_total_count / v_parallel;',
-'		-- dbms_output.put_line(''---------'' );',
-'		-- dbms_output.put_line(''total_count : '' || p_total_count);',
-'		-- dbms_output.put_line(''parallel    : '' || v_parallel);',
-'		-- dbms_output.put_line(''piece_size  : '' || v_piece_size);',
+'$IF Unzip_Parallel.c_debug $THEN',
+'		dbms_output.put_line(''---------'' );',
+'		dbms_output.put_line(''total_count : '' || p_total_count);',
+'		dbms_output.put_line(''parallel    : '' || v_parallel);',
+'		dbms_output.put_line(''piece_size  : '' || v_piece_size);',
+'$END',
 '		v_chunk_sql :=',
 '			''WITH PA AS ( SELECT '' || p_total_count || '' CNT, '' || v_piece_size || '' LIMIT FROM DUAL) ''',
 '			|| ''SELECT (LEVEL - 1) * LIMIT + 1 start_id, LEAST(LEVEL * LIMIT, PA.CNT)  end_id ''',
@@ -10288,9 +10381,11 @@ unistr('	c_msg_file_empty 	CONSTANT VARCHAR2(500) := ''The zip archive does not 
 '			dbms_parallel_execute.resume_task(v_job_name);',
 '			v_status := dbms_parallel_execute.task_status(v_job_name);',
 '		end loop;',
-'		-- dbms_output.put_line(''tries       : '' || v_try);',
-'		-- dbms_output.put_line(''status      : '' || v_status);',
+'$IF Unzip_Parallel.c_debug $THEN',
+'		dbms_output.put_line(''tries       : '' || v_try);',
+'		dbms_output.put_line(''status      : '' || v_status);',
 '		-- Done with processing; drop the task',
+'$END',
 '		dbms_parallel_execute.drop_task(v_job_name);',
 '		if v_status = dbms_parallel_execute.finished then',
 '			p_SQLCode := 0;',
@@ -10299,7 +10394,15 @@ unistr('	c_msg_file_empty 	CONSTANT VARCHAR2(500) := ''The zip archive does not 
 '			p_SQLCode := v_SQLCode;',
 '			p_Message := v_Message;',
 '		end if;',
-'	end Expand_Zip_Parallel;',
+'	end Expan'))
+);
+end;
+/
+begin
+wwv_flow_api.append_to_install_script(
+ p_id=>wwv_flow_api.id(81192547075153663)
+,p_script_clob=>wwv_flow_string.join(wwv_flow_t_varchar2(
+'d_Zip_Parallel;',
 '',
 '	PROCEDURE Load_zip_file_query (',
 '		p_Load_Zip_Query IN VARCHAR2,',
@@ -10319,9 +10422,11 @@ unistr('	c_msg_file_empty 	CONSTANT VARCHAR2(500) := ''The zip archive does not 
 '			dbms_sql.bind_variable(v_cur, '':search_value'', p_Search_Value);',
 '		end if;',
 '		dbms_sql.describe_columns2(v_cur, v_col_cnt, v_rec_tab);',
-'		/* for j in 1..v_col_cnt loop',
-'			-- dbms_output.put_line(''col_name : '' || v_rec_tab(j).col_name || '', type: '' || v_rec_tab(j).col_type);',
-'		end loop; */',
+'$IF Unzip_Parallel.c_debug $THEN',
+'		for j in 1..v_col_cnt loop',
+'			dbms_output.put_line(''col_name : '' || v_rec_tab(j).col_name || '', type: '' || v_rec_tab(j).col_type);',
+'		end loop; ',
+'$END',
 '		dbms_sql.define_column(v_cur, 1, p_zip_file);',
 '		if v_col_cnt >= 2 then',
 '			dbms_sql.define_column(v_cur, 2, p_Archive_Name, 4000);',
@@ -10338,7 +10443,28 @@ unistr('	c_msg_file_empty 	CONSTANT VARCHAR2(500) := ''The zip archive does not 
 '	  when others then',
 '		dbms_sql.close_cursor(v_cur);',
 '		raise;',
-'	end;',
+'	end Load_zip_file_query;',
+'',
+'	PROCEDURE Delete_Zip_File_Query (',
+'		p_Delete_Zip_Query IN VARCHAR2,',
+'		p_Search_Value IN VARCHAR2',
+'	)',
+'	is',
+'		v_cur INTEGER;',
+'		v_rows INTEGER;',
+'	begin',
+'		v_cur := dbms_sql.open_cursor;',
+'		dbms_sql.parse(v_cur, p_Delete_Zip_Query, DBMS_SQL.NATIVE);',
+'		IF p_Search_Value IS NOT NULL then',
+'			dbms_sql.bind_variable(v_cur, '':search_value'', p_Search_Value);',
+'		end if;',
+'		v_rows := dbms_sql.execute (v_cur);',
+'		dbms_sql.close_cursor(v_cur);',
+'	exception',
+'	  when others then',
+'		dbms_sql.close_cursor(v_cur);',
+'		raise;',
+'	end Delete_Zip_File_Query;',
 '',
 '	PROCEDURE Save_Unzipped_File (',
 '		p_Save_File_Code VARCHAR2,',
@@ -10353,21 +10479,15 @@ unistr('	c_msg_file_empty 	CONSTANT VARCHAR2(500) := ''The zip archive does not 
 '		v_cur INTEGER;',
 '		v_rows INTEGER;',
 '	begin',
-'		-- dbms_output.put_line(''Save_Unzipped_File: ''||p_Folder_Id ||'' ,'' || p_File_Name || '', '' || p_File_Date);',
+'$IF Unzip_Parallel.c_debug $THEN',
+'		dbms_output.put_line(''Save_Unzipped_File: ''||p_Folder_Id ||'' ,'' || p_File_Name || '', '' || p_File_Date);',
+'$END',
 '		-- :folder_id, :unzipped_file, :file_name, :file_date, :file_size, :mime_type',
 '		v_cur := dbms_sql.open_cursor;',
 '		dbms_sql.parse(v_cur, ''begin '' || p_Save_File_Code || '' end;'', DBMS_SQL.NATIVE);',
 '		if instr(p_Save_File_Code, '':folder_id'') > 0 then',
 '			dbms_sql.bind_variable(v_cur, '':folder_id'', p_Folder_Id);',
-'		en'))
-);
-end;
-/
-begin
-wwv_flow_api.append_to_install_script(
- p_id=>wwv_flow_api.id(81192547075153663)
-,p_script_clob=>wwv_flow_string.join(wwv_flow_t_varchar2(
-'d if;',
+'		end if;',
 '		if instr(p_Save_File_Code, '':unzipped_file'') > 0 then',
 '			dbms_sql.bind_variable(v_cur, '':unzipped_file'', p_unzipped_file);',
 '		end if;',
@@ -10493,7 +10613,9 @@ wwv_flow_api.append_to_install_script(
 '			execute immediate ''begin :folder_id := '' || p_Create_Path_Code || ''; end;''',
 '				using out v_root_id, v_Parent_Folder, v_Folder_Id;',
 '			v_Folder_Id := v_root_id;',
-'			-- dbms_output.put_line(''Parent_Folder B: '' || v_Parent_Folder || '', id : '' || v_root_id);',
+'$IF Unzip_Parallel.c_debug $THEN',
+'			dbms_output.put_line(''Parent_Folder B: '' || v_Parent_Folder || '', id : '' || v_root_id);',
+'$END',
 '		end if;',
 '',
 '		as_zip.get_file_date_list ( v_zipped_blob, p_Encoding, v_file_list, v_date_list, v_offset_list);',
@@ -10526,14 +10648,18 @@ wwv_flow_api.append_to_install_script(
 '					v_File_Path := NVL(SUBSTR(v_Full_Path, 1, INSTR(v_Full_Path, ''/'', -1)), '' '');',
 '					v_File_Path := Prefix_File_Path(v_Archive_Name, v_File_Path);',
 '					v_File_Name := SUBSTR(v_Full_Path, INSTR(v_Full_Path, ''/'', -1) + 1);',
-'					-- dbms_output.put_line(''Current Path '' || v_File_Path || '' - Full: '' || v_Full_Path );',
+'$IF Unzip_Parallel.c_debug $THEN',
+'					dbms_output.put_line(''Current Path '' || v_File_Path || '' - Full: '' || v_Full_Path );',
+'$END',
 '					if v_File_Path != v_Last_Path',
 '					and (NOT p_Only_Files or v_File_Name IS NOT NULL) then',
 '						-- :folder_id := Unzip_Parallel.Create_Path (:path_name, :root_id);',
 '						execute immediate ''begin :folder_id := '' || p_Create_Path_Code || ''; end;''',
 '							using out v_Folder_Id, v_File_Path, v_root_id;',
-'						-- dbms_output.put_line(''----------'');',
-'						-- dbms_output.put_line(''Create_Path '' || v_Folder_Id || '' '' || v_File_Path );',
+'$IF Unzip_Parallel.c_debug $THEN',
+'						dbms_output.put_line(''----------'');',
+'						dbms_output.put_line(''Create_Path '' || v_Folder_Id || '' '' || v_File_Path );',
+'$END',
 '						v_Last_Path := v_File_Path;',
 '					end if;',
 '				else -- when no path is stored, then the file name includes the file path',
@@ -10647,6 +10773,7 @@ wwv_flow_api.append_to_install_script(
 '		p_Init_Session_Code VARCHAR2 DEFAULT NULL,	-- PL/SQL code for initialization of session context.',
 '		p_Load_Zip_Code 	VARCHAR2 DEFAULT NULL,	-- PL/SQL code for loading the zipped blob and filename. The bind variable :search_value can be used to pass the p_Search_Value attribute.',
 '		p_Load_Zip_Query	VARCHAR2 DEFAULT NULL,	-- SQL Query for loading the zipped blob and filename. The bind variable :search_value or an page item name can be used to bind to the Page Item provided by the Search Item Attribute.',
+'		p_Delete_Zip_Query	VARCHAR2 DEFAULT NULL,	-- SQL Query for deleting the source of the zipped blob and filename. The bind variable :search_value or an page item name can be used to bind.',
 '		p_Search_Value		VARCHAR2 DEFAULT NULL,	-- Search value for the bind variable in the Load Zip Query code.',
 '		p_Folder_query 		VARCHAR2 DEFAULT NULL,	-- SQL Query for parameters to store the folders in a recursive tree table. When this field is empty, the :file_name will be prefixed with the path in the Save file code.',
 '		p_Create_Path_Code 	VARCHAR2 DEFAULT NULL,	-- PL/SQL code to save the path of the saved files.',
@@ -10725,8 +10852,10 @@ wwv_flow_api.append_to_install_script(
 '				|| ''p_Encoding => q''''{'' || v_encoding || ''}'''''' || chr(10)',
 '				|| '');'' || chr(10)',
 '				|| ''end;'';',
-'			-- dbms_output.put_line(''----'');',
-'			-- dbms_output.put_line(v_process_text);',
+'$IF Unzip_Parallel.c_debug $THEN',
+'			dbms_output.put_line(''----'');',
+'			dbms_output.put_line(v_process_text);',
+'$END',
 '			commit; -- create folders finished',
 '			Unzip_Parallel.Expand_Zip_Parallel (v_process_text, v_total_count, p_SQLCode, p_Message);',
 '		else',
@@ -10748,18 +10877,62 @@ wwv_flow_api.append_to_install_script(
 '			commit; -- create files and folders finished',
 '			p_SQLCode := 0;',
 '		end if;',
+'		if p_Delete_Zip_Query IS NOT NULL then ',
+'			Unzip_Parallel.Delete_Zip_File_Query (p_Delete_Zip_Query, p_Search_Value);',
+'		end if;',
+'	exception',
+'	  when others then',
+'	  	p_SQLCode := SQLCODE;',
+'	  	p_Message := SQLERRM;',
+'		if p_Delete_Zip_Query IS NOT NULL then ',
+'			Unzip_Parallel.Delete_Zip_File_Query (p_Delete_Zip_Query, p_Search_Value);',
+'		end if;	  	',
 '	end Expand_Zip_Archive;',
+'',
+'	PROCEDURE Default_Completion (p_SQLCode NUMBER, p_Message VARCHAR2, p_Filename VARCHAR2)',
+'	is',
+'	begin',
+'		dbms_output.put_line(''Expand_Zip_Archive_Job for file '' || p_Filename || '', Result : '' || p_SQLCode || ''  '' || p_Message );',
+'	end;',
+'',
+'	PROCEDURE PLSQL_Completion (p_SQLCode NUMBER, p_Message VARCHAR2, p_Filename VARCHAR2)',
+'	is',
+'		v_message		VARCHAR2(4000);',
+'	begin',
+'		if p_Message IS NOT NULL then',
+'			v_message := APEX_LANG.LANG (',
+'				p_primary_text_string => p_Message,',
+'				p_primary_language => ''en''',
+'			);',
+'			raise_application_error (Unzip_Parallel.c_App_Error_Code, v_message);',
+'		end if;',
+'	end;',
+'',
+'	PROCEDURE AJAX_Completion (p_SQLCode NUMBER, p_Message VARCHAR2, p_Filename VARCHAR2)',
+'	is',
+'	begin',
+'		htp.init();',
+'		if p_SQLCode = 0 then',
+'			htp.p(''OK'');',
+'		else',
+'			htp.p(p_Message);',
+'		end if;',
+'	exception when value_error then',
+'		dbms_output.put_line(p_Message);',
+'	end;',
 '',
 '	PROCEDURE Expand_Zip_Archive_Job (',
 '		p_Init_Session_Code VARCHAR2 DEFAULT NULL,	-- PL/SQL code for initialization of session context.',
 '		p_Load_Zip_Query	VARCHAR2,	-- SQL Query for loading the zipped blob and filename. The bind variable :search_value or an page item name can be used to bind to the Page Item provided by the Search Item Attribute.',
+'		p_Delete_Zip_Query	VARCHAR2 DEFAULT NULL,	-- SQL Query for deleting the source of the zipped blob and filename. The bind variable :search_value or an page item name can be used to bind.',
 '		p_File_Names		VARCHAR2,	-- file names for the bind variable in the Load Zip Query code.',
 '		p_Folder_query 		VARCHAR2,	-- SQL Query for parameters to store the folders in a recursive tree table. When this field is empty, the :file_name will be prefixed with the path in the Save file code.',
 '		p_Filter_Path_Cond 	VARCHAR2 DEFAULT ''true'',-- Condition to filter the folders that are extracted from the zip archive. The bind variable :path_name delivers path names like /root/sub1/sub2/ to the expression.',
 '		p_Save_File_Code 	VARCHAR2,				-- PL/SQL code to save an unzipped file from the zip archive. The bind variables :unzipped_file, :file_name, :file_date, :file_size, :mime_type, :folder_id deliver values to be saved.',
 '		p_Parent_Folder 	VARCHAR2 DEFAULT NULL,	-- Pathname of the Directory where the unzipped files are saved.',
 '		p_Container_ID		NUMBER  DEFAULT NULL,   -- folder table foreign key reference value to container table',
-'		p_Context  			BINARY_INTEGER DEFAULT 0',
+'		p_Context  			BINARY_INTEGER DEFAULT 0,',
+'		p_Completion_Procedure VARCHAR2 DEFAULT ''unzip_parallel.Default_Completion'' -- Name of a procedure with a call profile like: unzip_Completion(p_SQLCode NUMBER, p_Message VARCHAR2)',
 '	)',
 '	is',
 '		v_file_names 	apex_application_global.vc_arr2;',
@@ -10771,6 +10944,7 @@ wwv_flow_api.append_to_install_script(
 '			Unzip_Parallel.Expand_Zip_Archive (',
 '				p_Init_Session_Code => p_Init_Session_Code,',
 '				p_Load_Zip_Query => p_Load_Zip_Query,',
+'				p_Delete_Zip_Query => p_Delete_Zip_Query,',
 '				p_Search_Value => v_file_names(i),',
 '				p_Folder_query => p_Folder_query,',
 '				p_Filter_Path_Cond => p_Filter_Path_Cond,',
@@ -10782,18 +10956,11 @@ wwv_flow_api.append_to_install_script(
 '				p_SQLCode => v_SQLCode,',
 '				p_Message => v_Message',
 '			);',
-'		end loop;',
-'		/*',
-'		begin',
-'			if v_SQLCode = 0 then',
-'				v_message := ''OK'';',
+'			if p_Completion_Procedure IS NOT NULL then ',
+'				execute immediate ''begin '' || p_Completion_Procedure || ''(:a, :b, :c); end;''',
+'				using in v_SQLCode, v_Message, v_file_names(i);',
 '			end if;',
-'			htp.init();',
-'			htp.p(v_message);',
-'		exception when value_error then',
-'			dbms_output.put_line(v_message);',
-'		end;',
-'		*/',
+'		end loop;',
 '	end Expand_Zip_Archive_Job;',
 '',
 'end unzip_parallel;',
@@ -10845,6 +11012,7 @@ wwv_flow_api.create_install_script(
 '	v_exec_result apex_plugin.t_process_exec_result;',
 '	v_Load_Zip_Query 	VARCHAR2(4000);',
 '	v_Search_Value		VARCHAR2(4000);',
+'	v_Init_Session_Code VARCHAR2(4000);',
 '	v_Execute_Parallel	BOOLEAN;',
 '	v_message			VARCHAR2(2000);',
 '	v_SQLCode 			INTEGER;',
@@ -10875,9 +11043,15 @@ wwv_flow_api.create_install_script(
 '	or instr(upper(v_Load_Zip_Query), ''WWV_FLOW_FILES'') > 0 then',
 '		v_Execute_Parallel := false;	-- this views are not accessable by background jobs',
 '	end if;',
+'	v_Init_Session_Code :=',
+'			''apex_session.attach ('' || ',
+'			''p_app_id=>'' || V(''APP_ID'') || '', '' || ',
+'			''p_page_id=>'' || V(''APP_PAGE_ID'') || '', '' || ',
+'			''p_session_id=>'' || V(''APP_SESSION'') || ',
+'			'');'' || chr(10) || p_plugin.attribute_01 ;',
 '',
 '	Unzip_Parallel.Expand_Zip_Archive (',
-'			p_Init_Session_Code => p_plugin.attribute_01,',
+'			p_Init_Session_Code => v_Init_Session_Code,',
 '			p_Load_Zip_Query 	=> v_Load_Zip_Query,',
 '			p_Search_Value 		=> v_Search_Value,',
 '			p_Folder_query 		=> p_process.attribute_03,',

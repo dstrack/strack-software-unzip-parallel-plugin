@@ -1155,6 +1155,7 @@ $END
 	  when others then
 	  	p_SQLCode := SQLCODE;
 	  	p_Message := SQLERRM;
+	  	ROLLBACK WORK;
 		if p_Delete_Zip_Query IS NOT NULL then 
 			Unzip_Parallel.Delete_Zip_File_Query (p_Delete_Zip_Query, p_Search_Value);
 		end if;	  	

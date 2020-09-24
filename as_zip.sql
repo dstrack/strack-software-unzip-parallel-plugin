@@ -1,14 +1,12 @@
 declare 
-    v_Schema_Name VARCHAR2(128) := SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA');
 	v_use_utl_file VARCHAR2(128);
 	v_stat VARCHAR2(32767);
 begin
 	SELECT case when COUNT(*) > 0 then 'TRUE' else 'FALSE' end INTO v_use_utl_file
-	FROM ALL_TAB_PRIVS 
-	WHERE TABLE_NAME = 'UTL_FILE' 
-	AND TABLE_SCHEMA = 'SYS' 
-	AND GRANTEE IN (v_Schema_Name, 'PUBLIC')
-	AND PRIVILEGE = 'EXECUTE';
+    FROM ALL_OBJECTS 
+    WHERE OBJECT_NAME = 'UTL_FILE'
+    AND OWNER = 'SYS' 
+    AND OBJECT_TYPE = 'PACKAGE';
 	/* generate the package as_zip_spec to enable conditional compilation */
 
 	v_stat := '

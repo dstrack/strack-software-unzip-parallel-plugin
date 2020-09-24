@@ -15,3 +15,5 @@ The packages as_zip, unzip_parallel and the function unzip_parallel_plugin have 
 execute the file unzip_parallel_plsql_code.sql to install the required database objects.
 You can add the files to the installation script of you application.
 
+A demo of the plugin can be found here:
+https://apex.oracle.com/pls/apex/f?p=118060:LOGIN_DESKTOP

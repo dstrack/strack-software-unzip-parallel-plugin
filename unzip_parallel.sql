@@ -31,6 +31,25 @@ is
 	This method causes a dramatic reduction of execution time for larger archives with tousends of files.
 	Chunks of the zipped archive can be executed in parallel by DBMS_SCHEDULER job slaves to further reduce execution time.
 */
+	TYPE rec_zip_directory IS RECORD (
+		path_name		as_zip.t_path_name,
+		file_date		DATE,
+		file_offest		INTEGER
+	);
+	TYPE tab_zip_directory IS TABLE OF rec_zip_directory;
+	TYPE cur_zip_directory IS REF CURSOR RETURN rec_zip_directory;
+	
+	TYPE rec_unzip_file_blobs IS RECORD (
+		file_path		VARCHAR2(32767),
+		file_name		VARCHAR2(1024),
+		file_date		DATE,
+		mime_type		VARCHAR2(1024),
+		file_size		INTEGER,
+		file_content	BLOB,
+		file_text 		CLOB
+	);
+	TYPE tab_unzip_file_blobs IS TABLE OF rec_unzip_file_blobs;
+	
 	c_Process_Name 		CONSTANT VARCHAR2(50) := 'Expand_Zip_Archive';
 	c_App_Error_Code	CONSTANT INTEGER := -20200;
 	c_msg_file_bad_type CONSTANT VARCHAR2(500) := 'The file is not a zip archive.'; -- 'Datei ist kein Zip-Archiv.'
@@ -48,6 +67,26 @@ is
 		p_folder_list	OUT NOCOPY as_zip.file_list,
 		p_file_count 	OUT INTEGER
     );
+    
+	FUNCTION Pipe_Zip_Directory (
+		p_zipped_blob 	IN BLOB, 
+		p_encoding 		IN VARCHAR2 DEFAULT NULL,
+		p_Start_ID 		IN INTEGER DEFAULT NULL,
+		p_End_ID 		IN INTEGER DEFAULT NULL
+	)
+	RETURN Unzip_Parallel.tab_zip_directory PIPELINED DETERMINISTIC PARALLEL_ENABLE;
+
+	FUNCTION Pipe_unzip_files_parallel (
+		p_zipped_blob	IN BLOB,
+		p_cur			IN Unzip_Parallel.cur_zip_directory
+	)
+	RETURN Unzip_Parallel.tab_unzip_file_blobs PIPELINED DETERMINISTIC PARALLEL_ENABLE (PARTITION p_cur BY ANY);
+
+	FUNCTION Pipe_unzip_files (
+		p_zipped_blob	IN BLOB,
+		p_encoding 		IN VARCHAR2 DEFAULT NULL
+	)
+	RETURN Unzip_Parallel.tab_unzip_file_blobs PIPELINED DETERMINISTIC PARALLEL_ENABLE;
 
 	function Create_Path (
 		p_Path_Name		VARCHAR2,
@@ -277,6 +316,82 @@ $END
 		dbms_sql.close_cursor(v_cur);
 		raise;
 	end;
+
+	FUNCTION Pipe_Zip_Directory (
+		p_zipped_blob 	IN BLOB, 
+		p_encoding 		IN VARCHAR2 DEFAULT NULL,
+		p_Start_ID 		IN INTEGER DEFAULT NULL,
+		p_End_ID 		IN INTEGER DEFAULT NULL
+	)
+	RETURN Unzip_Parallel.tab_zip_directory PIPELINED DETERMINISTIC PARALLEL_ENABLE
+	is
+		v_file_list		as_zip.file_list;
+		v_date_list		as_zip.date_list;
+		v_offset_list	as_zip.foffset_list;
+        v_Start_ID		BINARY_INTEGER;
+        v_End_ID		BINARY_INTEGER;
+	begin
+		as_zip.get_file_date_list ( p_zipped_blob, p_Encoding, v_file_list, v_date_list, v_offset_list);
+		v_Start_ID 	:= NVL(p_Start_ID, 1);
+		v_End_ID	:= LEAST(NVL(p_End_ID, v_file_list.count), v_file_list.count);
+		for i in v_Start_ID .. v_End_ID loop
+			pipe row( rec_zip_directory(v_file_list(i), v_date_list(i), v_offset_list(i)));
+		end loop;
+	end Pipe_Zip_Directory;
+
+	FUNCTION Pipe_unzip_files_parallel (
+		p_zipped_blob	IN BLOB,
+		p_cur			IN Unzip_Parallel.cur_zip_directory
+	)
+	RETURN Unzip_Parallel.tab_unzip_file_blobs PIPELINED DETERMINISTIC PARALLEL_ENABLE (PARTITION p_cur BY ANY)
+	is
+		v_inrow		rec_zip_directory;
+		v_outrow 	rec_unzip_file_blobs;
+	begin
+		loop
+			fetch p_cur into v_inrow;
+			exit when p_cur%NOTFOUND; 
+			v_outrow.file_content := as_zip.get_file (
+				p_zipped_blob => p_zipped_blob, 
+				p_file_name => v_inrow.path_name, 
+				p_offset => v_inrow.file_offest
+			);
+			v_outrow.File_Path := SUBSTR(v_inrow.path_name, 1, INSTR(v_inrow.path_name, '/', -1));
+			v_outrow.File_Name := SUBSTR(v_inrow.path_name,    INSTR(v_inrow.path_name, '/', -1) + 1);
+			v_outrow.File_Date := v_inrow.file_date;
+			v_outrow.Mime_Type := unzip_parallel.Mime_Type_from_Extension(v_outrow.File_Name);
+			v_outrow.File_Size := NVL(dbms_lob.getlength(v_outrow.file_content), 0);
+			pipe row(v_outrow);
+		end loop;
+		close p_cur;
+		return;
+	end Pipe_unzip_files_parallel;
+
+	FUNCTION Pipe_unzip_files (
+		p_zipped_blob	IN BLOB,
+		p_encoding 		IN VARCHAR2 DEFAULT NULL
+	)
+	RETURN Unzip_Parallel.tab_unzip_file_blobs PIPELINED DETERMINISTIC PARALLEL_ENABLE
+	is
+		cursor files_cur is
+		select *
+		from table( Unzip_Parallel.Pipe_unzip_files_parallel(
+			p_zipped_blob,
+			cursor( select * from table(
+				Unzip_Parallel.Pipe_Zip_Directory(
+					p_zipped_blob, p_encoding))
+			)
+		));
+		v_row Unzip_Parallel.rec_unzip_file_blobs;
+	begin
+		OPEN files_cur;
+		LOOP
+			FETCH files_cur INTO v_row;
+			EXIT WHEN files_cur%NOTFOUND;
+			pipe row (v_row);
+		END LOOP;
+		CLOSE files_cur;
+	end Pipe_unzip_files;
 
 	FUNCTION Create_Path (
 		p_Path_Name		VARCHAR2,

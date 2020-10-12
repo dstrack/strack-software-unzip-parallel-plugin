@@ -217,6 +217,19 @@ begin
 end;
 /
 
+ALTER SESSION ENABLE PARALLEL QUERY PARALLEL 4;
+-- list content of a zip archive 
+select T.file_path, T.file_name, T.file_date, T.mime_type, T.file_size
+from demo_files S, 
+	table(Unzip_Parallel.Pipe_unzip_files_parallel(
+		S.FILE_CONTENT,
+		cursor( select * from table(
+			Unzip_Parallel.Pipe_Zip_Directory(
+				S.FILE_CONTENT)) 
+	)) 
+) T 
+where S.FILE_NAME = 'example.zip'
+;
 
 /*
 

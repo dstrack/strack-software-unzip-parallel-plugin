@@ -28,7 +28,7 @@ is
 
 	The process calculates an array of offsets to the individual zipped files of the zipped archive.
 	The offsets are then used to expand all files without repeated sequential searching within the zipped archive.
-	This method causes a dramatic reduction of execution time for larger archives with tousends of files.
+	This method causes a dramatic reduction of execution time for larger archives with thousands of files.
 	Chunks of the zipped archive can be executed in parallel by DBMS_SCHEDULER job slaves to further reduce execution time.
 */
 	TYPE rec_zip_directory IS RECORD (

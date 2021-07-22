@@ -24,7 +24,7 @@ is
 	and optionally file_date date, file_size number, mime_type varchar2(300), folder_id number.
 	The table for the folders has at least a folder_id number, parent_id number, folder_name varchar2.
 	When no folder definition is provided in the Folder Query attribute, full pathnames are stored in the file_name field of the files table.
-	Zip file larger than 5MB will be processed in parallel to reduce the processing time when parallel execution is enabled.
+	Zip files larger than 5MB will be processed in parallel to reduce the processing time when parallel execution is enabled.
 
 	The process calculates an array of offsets to the individual zipped files of the zipped archive.
 	The offsets are then used to expand all files without repeated sequential searching within the zipped archive.
